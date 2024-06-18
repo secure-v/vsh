@@ -1,0 +1,990 @@
+#!/usr/bin/python3
+
+# ====================================================================================================
+#  VSH: SHell for Visualizing vcd file                                                              ||
+#  Copyright (C) %-4d Clayden University                                                            ||
+#  License GPLv3: GNU GPL version 3                                                                 ||
+#  Author: Fu-yao                                                                                   ||
+#  Bug report & maintainer: fuyao-cu@outlook.com                                                    ||
+#  VSH is open source and freely distributable                                                      ||
+# ====================================================================================================
+
+import os
+import sys
+import bisect
+import datetime
+from enum import Enum
+from pyDigitalWaveTools.vcd.parser import VcdParser
+from pyDigitalWaveTools.vcd.common import VcdVarScope
+from pyDigitalWaveTools.vcd.parser import VcdVarParsingInfo
+
+import cmd2
+from cmd2 import Cmd2ArgumentParser, with_argparser
+
+from cmd2 import (
+    Bg,
+    Fg,
+    style,
+)
+
+search_var_list = [] # the global list of signal name (while using search cmd)
+
+# -------------------------------- expression evaluation -------------------------------- #
+operator_precedence = {
+    # "-" :   2,
+    # "!" :   2,
+    # "~" :   2,
+    "/" :   3,
+    "*" :   3,
+    "%" :   3,
+    "+" :   4,
+    "-" :   4,
+    "<<":   5,
+    ">>":   5,
+    ">=":   6,
+    ">" :   6,
+    "<=":   6,
+    "<" :   6,
+    "==":   7,
+    "!=":   7,
+    "^" :   9,
+    "||":  12,
+    "|" :  10,
+    "&&":  11,
+    "&" :   8,
+}
+
+
+class expr_eval:
+    def __init__(self):
+        self.op = None # ?: signal name (var)
+        self.val1 = None
+        self.val2 = None
+        self.var_val_dict = None
+        
+        return
+
+    def set_var_val_dict(self, vvd):
+        self.var_val_dict = vvd
+
+        return 
+    
+    def parse(self, expr):
+        expr = expr.lstrip().rstrip()
+        nest_bracket = []
+        nest_level = 0
+
+        for i in expr:
+            if i == '(':
+                nest_level += 1
+                nest_bracket.append(nest_level)
+                
+            elif i == ')':
+                nest_bracket.append(nest_level)
+                nest_level -= 1
+            else:
+                nest_bracket.append(nest_level)
+
+        if nest_level != 0:
+            print("Invalid expression:", expr)
+
+            return
+        
+        flag = False
+
+        for i in nest_bracket:
+            if i == 0:
+                flag = True
+                break
+
+        if flag == False: # eg: "(1+2)"
+            self.parse(expr[1:-1])
+
+            return
+        
+        min_op_index = 0
+        min_op_precedence = 0
+        i = 1 # skip the first item (not binary operator)
+        cur_expr_op = ""
+
+        while i < (len(nest_bracket) - 1): # cannot find op at the end of a valid expression, eg: 1+2-
+            if nest_bracket[i] == 0:
+                for (k, v) in operator_precedence.items():
+                    if k == expr[i:i + 2]: # match "==" ">=" etc
+                        if min_op_precedence <= v:
+                            min_op_index = i
+                            min_op_precedence = v
+                            self.op = k
+                            cur_expr_op = k
+
+                        i += 1
+
+                        break
+                    elif k == expr[i]: # match "-" "+" etc
+                        if min_op_precedence <= v:
+                            min_op_index = i
+                            min_op_precedence = v
+                            self.op = k
+                            cur_expr_op = k
+
+                        break
+
+            i += 1
+        
+        if min_op_precedence == 0:
+            if expr[0:2] == "0x":
+                if expr[2] == 'x' or expr[2] == 'z':
+                    self.val2 = expr[2]
+                else:
+                    self.val2 = int(expr, 16) # need assert when fail
+            elif expr[0:2] == "0b":
+                if expr[2] == 'x' or expr[2] == 'z':
+                    self.val2 = expr[2]
+                else:
+                    self.val2 = int(expr, 2) # need assert when fail
+            elif expr[0:2] == "0o":
+                if expr[2] == 'x' or expr[2] == 'z':
+                    self.val2 = expr[2]
+                else:
+                    self.val2 = int(expr, 8) # need assert when fail
+            elif expr[0] >= '0' and expr[0] <= '9': # number
+                for i in expr:
+                    if i >= '0' and i <= '9':
+                        continue
+                    else:
+                        print("Invalid expression:", expr)
+                        return
+        
+                self.val2 = int(expr)
+            elif expr[0] == "-" or expr[0] == "!" or expr[0] == "~":
+                self.op = expr[0]
+                child = expr_eval()
+                child.parse(expr[1:])
+                self.val2 = child
+
+                return
+            else: # signal name
+                self.op = "?"
+                self.val2 = expr
+                global search_var_list
+                search_var_list.append(expr)
+
+            return
+        
+        child1 = expr_eval()
+        child1.parse(expr[0:min_op_index])
+        self.val1 = child1
+
+        child2 = expr_eval()
+        child2.parse(expr[min_op_index + len(cur_expr_op):])
+        self.val2 = child2
+
+        return 
+
+    def eval(self):
+        if self.op == None and self.val2 == None:
+            print("Invalid expression!")
+            return 
+        
+        if self.op == None:
+            return self.val2
+        
+        if self.op == "?":
+            return self.var_val_dict[self.val2]
+        
+        self.val2.set_var_val_dict(self.var_val_dict)
+        opr =  self.val2.eval()
+
+        if opr == None:
+            print("Invalid expression!")
+            return
+        
+        if self.val1 == None: # unary
+            if self.op == '-':
+                return -opr
+            elif self.op == '~':
+                return ~opr
+            elif self.op == '!':
+                return not opr
+        
+        self.val1.set_var_val_dict(self.var_val_dict)
+        opl = self.val1.eval()
+
+        if opl == None:
+            print("Invalid expression!")
+            return
+        
+        res = 0
+
+        if self.op == '/':
+            res = int(opl / opr)
+        elif self.op == '*':
+            res = opl * opr
+        elif self.op == '%':
+            res = opl % opr
+        elif self.op == '+':
+            res = opl + opr
+        elif self.op == '-':
+            res = opl - opr
+        elif self.op == '<<':
+            res = opl << opr
+        elif self.op == '>>':
+            res = opl >> opr
+        elif self.op == '<':
+            res = opl < opr
+        elif self.op == '<=':
+            res = opl <= opr
+        elif self.op == '>':
+            res = opl > opr
+        elif self.op == '>=':
+            res = opl >= opr
+        elif self.op == '==':
+            res = opl == opr
+        elif self.op == '!=':
+            res = opl != opr
+        elif self.op == '&':
+            res = opl & opr
+        elif self.op == '^':
+            res = opl ^ opr
+        elif self.op == '|':
+            res = opl | opr
+        elif self.op == '&&':
+            res = opl and opr
+        elif self.op == '||':
+            res = opl or opr
+
+        return res
+
+# ======================================================================================= #
+
+list_argparser = Cmd2ArgumentParser()
+list_argparser.add_argument('-s', '--signal_list', action='store_true', help='list current signals under spying')
+list_argparser.add_argument('word', nargs='?', help='path of submodule')
+
+add_argparser = Cmd2ArgumentParser()
+add_argparser.add_argument('-f', '--format', type=str, help='set display format of signal value')
+add_argparser.add_argument('word', nargs='?', help='signal name')
+
+icon = """======================================================================================================
+||    ...@@@@@@@@@                                                               @                  ||
+||     ......@@@@@@@@@@@@@                                                     @@@                  ||     
+||      ........./     \@@@@@@@@@@                                           @@@@                   ||
+||       ........|  O  |@@@@@@@@@@@@                                        @@@@@                   ||
+||        .......\     /...@@@@@@@@@@@@@@@@                                 @@@@@@@@       @@@@@@   ||  
+||          .......@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                         @@@@@@@@@@@@@@@@@@       ||    
+||           .......@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@            || 
+||             .......@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                       ||
+||                 ......@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@                              ||   
+||                    ......@@@@@@@@.......@@@@@@@@@@@@@@@@@@@@@                                    ||
+||                         @@@@@@@....                                                              ||
+||                           @@@@@                                                                  ||
+||                             @@@@                                                                 ||    
+||                                @@                                                                ||
+======================================================================================================
+"""
+
+info = """||                               SHell for Visualizing vcd file                                     ||
+|| Copyright (C) %-4d Clayden University                                                            ||
+|| License GPLv3: GNU GPL version 3                                                                 ||
+|| Bug report & maintainer: fuyao-cu@outlook.com                                                    ||
+|| VSH is open source and freely distributable                                                      ||
+======================================================================================================""" % datetime.datetime.today().year
+
+
+
+class DISP_FORMAT(Enum):
+    b = 0
+    o = 1
+    d = 2
+    h = 3
+
+class vsh(cmd2.Cmd):
+    CUSTOM_CATEGORY = 'Custom Commands'
+    def __init__(self):
+        super().__init__(
+            multiline_commands=['echo'],
+            persistent_history_file='.vsh_history',
+            startup_script='scripts/startup.txt',
+            include_ipy=True,
+        )
+
+        # self.intro = style(icon, fg=Fg.BLUE, bg=None, bold=True) + info
+        self.intro = icon.replace('@', "\033[34m@\033[0m") + info
+        self.prompt = 'vsh> '
+        self.continuation_prompt = '... '
+        self.self_in_py = True
+        self.default_category = 'cmd2 Built-in Commands'
+        self.foreground_color = Fg.CYAN.name.lower()
+        self.vcd = VcdParser()
+        self.cur_mod = None
+        self.t = 0
+        self.spy_sig_list = [] # [(VcdVarParsingInfo, time_val, format, color)]
+        self.shadow_for_logic = False # do not show the signal value when wire length == 1
+
+        fg_colors = [c.name.lower() for c in Fg]
+        self.add_settable(
+            cmd2.Settable('foreground_color', str, 'Foreground color to use with echo command', self, choices=fg_colors)
+        )
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_intro(self, _):
+        """Display the intro banner"""
+        print(self.intro)
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_sfl(self, opts):
+        """Display color bar for signal (wire length == 1)"""
+        if opts == "0":
+            self.shadow_for_logic = False
+        else:
+            self.shadow_for_logic = True
+        
+        return
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_load(self, opts):
+        if os.path.exists(opts) == False:
+            print("No such vcd file:", opts)
+            return
+
+        with open(opts) as vcd_file:
+            self.vcd.parse(vcd_file)
+
+        self.prompt = "/ > "
+        self.cur_mod = self.vcd.scope
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(list_argparser)
+    def do_list(self, opts):
+        if opts.signal_list:
+            index_num = 0
+            
+            for i in self.spy_sig_list:
+                mod = i[0].parent
+                mod_hier = ""
+
+                if mod.parent == None:
+                    mod_hier = "/" + mod_hier
+
+                while mod.parent != None:
+                    mod_hier = "/" + mod.name + mod_hier
+                    mod = mod.parent
+
+                print("%-4d" % index_num, i[0].name, i[0].width, mod_hier)
+                index_num += 1
+    
+            return 
+
+        if self.cur_mod == None:
+            return
+        
+        mod = self.cur_mod.children
+
+        for k, v in mod.items():
+            if isinstance(v, VcdVarParsingInfo):
+                print("\033[32m%s\033[0m %d" % (v.name, v.width))
+            elif isinstance(v, VcdVarScope):
+                print("\033[34m%s\033[0m" % (v.name))
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(list_argparser)
+    def do_l(self, opts):
+        if opts.signal_list:
+            index_num = 0
+            
+            for i in self.spy_sig_list:
+                mod = i[0].parent
+                mod_hier = ""
+
+                if mod.parent == None:
+                    mod_hier = "/" + mod_hier
+
+                while mod.parent != None:
+                    mod_hier = "/" + mod.name + mod_hier
+                    mod = mod.parent
+
+                print("%-4d" % index_num, i[0].name, i[0].width, mod_hier)
+                index_num += 1
+
+            return 
+
+        if self.cur_mod == None:
+            return
+
+        mod = self.cur_mod.children
+
+        for k, v in mod.items():
+            if isinstance(v, VcdVarParsingInfo):
+                print("\033[32m%s\033[0m %d" % (v.name, v.width))
+            elif isinstance(v, VcdVarScope):
+                print("\033[34m%s\033[0m" % (v.name))
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_pwm(self, opts):
+        mod = self.cur_mod
+
+        if mod == None:
+            print("Please load vcd file.")
+            return
+        
+        pwm = ""
+
+        if mod.parent == None:
+            pwm = "/" + pwm
+                
+        while mod.parent != None:
+            pwm = "/" + mod.name + pwm
+            mod = mod.parent
+
+        print(pwm)
+    
+    def adjust_prompt(self):
+        mod = self.cur_mod
+        self.prompt = " > "
+
+        if mod.parent == None:
+            self.prompt = "/" + self.prompt
+        
+        while mod.parent != None:
+            self.prompt = "/" + mod.name + self.prompt
+            mod = mod.parent
+        
+        return
+        
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_cm(self, opts):
+        if opts == ".":
+            return 
+        elif opts == "..":
+            mod = self.cur_mod
+
+            if mod.parent != None:
+                self.cur_mod = mod.parent
+                self.adjust_prompt()
+            
+            return
+        elif opts == "/":
+            self.cur_mod = self.vcd.scope
+            self.adjust_prompt()
+            
+            return
+
+        if self.cur_mod == None:
+            print("Please load vcd file.")
+            return
+        
+        if opts == None or opts == "":
+            self.do_cm("/")
+
+            return
+        
+        mod_children = self.cur_mod.children
+        args = opts
+
+        if opts[0] == '/': # absolute path
+            mod_children = self.vcd.scope.children
+            args = opts[1:]
+
+        args_list = args.split('/')
+        flag = True
+
+        for i in args_list:
+            for k, v in mod_children.items():
+                flag = False
+
+                if v.name == i and isinstance(v, VcdVarScope):
+                    mod_children = v.children
+                    flag = True
+                    break
+            
+            if flag == False:
+                break
+
+        if flag == False:
+            print("No such submodule:", opts)
+        else:
+            self.cur_mod = v
+            self.adjust_prompt()
+
+        return 
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_t(self, opts):
+        if opts == "":
+            print(self.t)
+            return 
+
+        res = 0
+
+        try:
+            res = int(opts)
+        except Exception as e:
+            print (e, ": Wrong parameter")
+            return
+        
+        self.t += res
+
+        if self.t < 0:
+            self.t = 0
+
+        print(self.t)
+
+        return 
+
+    def align_sig(self, side_w, max_sig_w, str_list, sig_width=None):
+        res = str_list[0].ljust(side_w, ' ')
+        val_str_list = [(str_list[1], 1)]
+
+        if self.shadow_for_logic and sig_width == 1:
+            for i in str_list[1:]:
+                if i == '1':
+                    res += "\033[4;27;44m \033[0m" * max_sig_w
+                else:
+                    res += "\033[4m_\033[0m" * max_sig_w
+            
+            return res
+
+        for i in range(2, len(str_list)):
+            if str_list[i] == val_str_list[-1][0]:
+                val_str_list[-1] = (val_str_list[-1][0], val_str_list[-1][1] + 1)
+            else:
+                val_str_list += [(str_list[i], 1)]
+
+        for i in val_str_list:
+            val_str = i[0].center(max_sig_w * i[1], ' ')
+            res += "\\" + val_str[1:-1] + "/"
+
+        # if sig_width == 1:
+        #     for i in val_str_list:
+        #         if i[0] == '1':
+        #             res += "\e[44m \e[0m" * i[1]
+        #         else:
+        #             res += "\e[4m \e[0m" * i[1]
+        # else:
+        #     for i in val_str_list:
+        #         val_str = i[0].center(max_sig_w * i[1], ' ')
+        #         res += "\\" + val_str[1:-1] + "/"
+
+        # for i in range(1, len(str_list)):
+        #     val_str = str_list[i].center(max_sig_w, ' ')
+        #     res += "\\" + val_str[1:-1] + "/"
+        
+        return res
+
+    def search_val(self, tmax, time_val_list):
+        index = bisect.bisect_right(time_val_list, self.t, hi = len(time_val_list), key = lambda X : X[0])
+        
+        if index == len(time_val_list):
+            return [time_val_list[-1][1]] * tmax
+
+        if time_val_list[index][0] > self.t:
+            index -= 1
+        
+        res = []
+        i = 0
+
+        while i < tmax:
+            if index == (len(time_val_list) - 1):
+                res += [time_val_list[-1][1]] * (tmax - i)
+                break
+            
+            if ((self.t + i) >= time_val_list[index][0]) and ((self.t + i) < time_val_list[index + 1][0]):
+                res += [time_val_list[index][1]]
+                i += 1
+            elif self.t + i >= time_val_list[index + 1][0]:
+                index += 1
+        
+        return res
+
+
+    def digit_conv(self, val_list, fmt):
+        res = []
+
+        for i in val_list:
+            bin_str = i
+            val_str = ""
+
+            if bin_str[0] == 'z' or bin_str[0] == 'x':
+                res += [bin_str]
+                continue
+
+            if i[0] == 'b':
+                bin_str = i[1:]
+
+                if bin_str[0] == 'z' or bin_str[0] == 'x':
+                    res += [bin_str]
+                    continue
+
+            if fmt == DISP_FORMAT.b:
+                val_str = bin_str
+            elif fmt == DISP_FORMAT.o:
+                val_str = oct(int(bin_str, 2))[2:]
+            elif fmt == DISP_FORMAT.d:
+                val_str = "%d" % int(bin_str, 2)
+            else: 
+                val_str = hex(int(bin_str, 2))[2:]
+            
+            res += [val_str]
+        
+        return res
+
+
+    def show_sig(self):
+        width = os.get_terminal_size().columns
+        height = os.get_terminal_size().lines
+        side_w = len("T=%d" % self.t)
+        
+
+        for i in self.spy_sig_list:
+            name_w = len(i[0].name)
+
+            if name_w > side_w:
+                side_w = name_w
+        
+        max_sig_w = 4
+
+        for i in self.spy_sig_list:
+            sig_w = 0
+
+            if i[2] == DISP_FORMAT.b:
+                sig_w = i[0].width + 2
+            elif i[2] == DISP_FORMAT.o or i[2] == DISP_FORMAT.d:
+                sig_w = int((i[0].width + 2) / 3) + 2
+            else: 
+                sig_w = ((i[0].width + 3) >> 2) + 2
+
+            if sig_w > max_sig_w:
+                max_sig_w = sig_w
+        
+        side_w += 3
+
+        if (side_w + max_sig_w) > width:
+            print("The terminal is too small: %d X %d, width >= %d is required." % (width, height, side_w + max_sig_w))
+
+            return 
+
+        tmax = int((width - side_w) / max_sig_w)
+        t_list = ["T=%d" % self.t]
+
+        for i in range(tmax):
+            t_list += ["%d" % i]
+        
+        # display the title (T)
+        t_str = self.align_sig(side_w, max_sig_w, t_list)
+        print("-" * len(t_str))
+        print(t_str)
+        print("-" * len(t_str))
+        
+        # display the signal
+        for i in self.spy_sig_list:
+            v = i[0]
+            sig_time_val_list = None
+
+            if isinstance(v.vcdId, list):
+                sig_time_val_list = v.vcdId
+            elif isinstance(v.vcdId, str):
+                sig_time_val_list = self.vcd.idcode2series[v.vcdId]
+
+            val_list = self.search_val(tmax, sig_time_val_list)
+            fmt = i[2]
+            val_list = self.digit_conv(val_list, fmt)
+
+            suffix = '[H]'
+
+            if fmt == DISP_FORMAT.b:
+                suffix = '[B]'
+            elif fmt == DISP_FORMAT.o:
+                suffix = '[O]'
+            elif fmt == DISP_FORMAT.d:
+                suffix = '[D]'
+
+            sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width)
+            print(style(sig_str, fg=i[1][0], bg=i[1][1], bold=i[1][2]))
+            
+        
+        print("=" * len(t_str))
+
+        return 
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_show(self, opts):
+        if len(self.spy_sig_list) == 0:
+            print("Please adding signal to display (T=%d)." % self.t)
+            return
+        
+        self.show_sig()
+
+        return 
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(add_argparser) # TODO: foreground / background / bold
+    def do_add(self, opts):
+        if opts.word == "":
+            return 
+
+        mod = self.cur_mod.children
+        
+        fmt = DISP_FORMAT.h
+        foreground = Fg.BLUE
+        background = None
+        bold = False
+
+        if opts.format == "b" or opts.format == "B" or opts.format == "bin" or opts.format == "BIN":
+            fmt = DISP_FORMAT.b
+        elif opts.format == "o" or opts.format == "O" or opts.format == "oct" or opts.format == "OCT":
+            fmt = DISP_FORMAT.o
+        elif opts.format == "d" or opts.format == "D" or opts.format == "dec" or opts.format == "DEC":
+            fmt = DISP_FORMAT.d
+        elif opts.format == "h" or opts.format == "H" or opts.format == "hex" or opts.format == "HEX":
+            fmt = DISP_FORMAT.h
+        elif opts.format == "" or opts.format == None:
+            fmt = DISP_FORMAT.h
+        else:
+            print("Error format:", opts.format)
+            return
+
+        if opts.word == "*":
+            for k, v in mod.items():
+                if isinstance(v, VcdVarParsingInfo):
+                    self.spy_sig_list += [(v, (foreground, background, bold), fmt)]
+            
+            return
+
+        for k, v in mod.items():
+            if v.name == opts.word and isinstance(v, VcdVarParsingInfo):
+                self.spy_sig_list += [(v, (foreground, background, bold), fmt)]
+                
+        return 
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_del(self, opts):
+        if opts == "":
+            return 
+
+        mod = self.cur_mod.children
+
+        if opts == "*":
+            self.spy_sig_list = []
+            
+            return
+        
+        new_list = []
+
+        for i in self.spy_sig_list:
+            if i[0].name != opts:
+                new_list += [i]
+
+        self.spy_sig_list = new_list
+
+        return 
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_conv(self, opts): # convert number
+        val = 0
+
+        if opts.isdigit() == False:
+            if len(opts) <= 2:
+                print("Invalid number:", opts)
+                return
+            
+            try:
+                if opts[0:2] == '0x':
+                    val = int(opts[2:], 16)
+                elif opts[0:2] == '0b':
+                    val = int(opts[2:], 2)
+                elif opts[0:2] == '0o':
+                    val = int(opts[2:], 8)
+                else:
+                    print("Invalid number:", opts)
+                    return
+            except Exception as e:
+                print("Invalid number:", opts)
+                return
+        
+        print("BIN:", bin(val)[2:])
+        print("OCT:", oct(val)[2:])
+        print("DEC:", val)
+        print("HEX:", hex(val)[2:])
+                
+        return 
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_search(self, opts): # search condition
+        if opts[0] == "\"":
+            opts = opts[1:]
+
+        if len(opts) < 1:
+            print ("Invalid expression:", "\"")
+            
+        if opts[-1] == "\"":
+            opts = opts[:-1]
+
+        ex_ev = expr_eval()
+        global search_var_list
+        search_var_list = [] # clear the list
+        ex_ev.parse(opts)
+
+        if len(search_var_list) == 0: # no signal name in expression
+            res = 0
+
+            try:
+                res = ex_ev.eval()
+            except Exception as e:
+                print ("Invalid expression:", opts)
+                return
+
+            if res != 0:
+                print("[0, +inf)")
+            
+            return
+
+        flag = False
+        time_point_for_search = set()
+        var_val_list_dict = dict()
+
+        for i in search_var_list:
+            flag = False
+
+            for j in self.spy_sig_list:
+                if j[0].name == i:
+                    flag = True
+                    sig_time_val_list = None
+
+                    if isinstance(j[0].vcdId, list):
+                        sig_time_val_list = j[0].vcdId
+                    elif isinstance(j[0].vcdId, str):
+                        sig_time_val_list = self.vcd.idcode2series[j[0].vcdId]
+
+                    for k in sig_time_val_list:
+                        time_point_for_search.add(k[0])
+                    
+                    var_val_list_dict[i] = sig_time_val_list
+                    break
+            
+            if i == "@t" or i == "@T":
+                continue
+            
+            if flag == False:
+                print("Please add signal \"%s\" first." % (i))
+                return
+
+        begin_point = 0
+        eval_nonzero = False
+        res_field = []
+        
+        for i in time_point_for_search:
+            var_val_dict = {} # var value in a certain time point
+            var_val_dict["@t"] = i # @t == time point
+            var_val_dict["@T"] = i
+
+            for (k, v) in var_val_list_dict.items():
+                index = bisect.bisect(v, i, hi = len(v), key = lambda X : X[0])
+
+                if index == 0:
+                    var_val_dict[k] = 0
+                else:
+                    bin_str = v[index  - 1][1]
+
+                    if bin_str[0] == 'b':
+                        bin_str = bin_str[1:]
+
+                    if bin_str[0] == 'z' or bin_str[0] == 'x':
+                        # print("Need to handle x and z in search, value name: %s!" % k)
+                        var_val_dict[k] = bin_str[0]
+                        continue
+
+                    var_val_dict[k] = int(bin_str, 2)
+
+            ex_ev.set_var_val_dict(var_val_dict)
+            eval_res = ex_ev.eval()
+            
+            if eval_res != 0: # satisfy
+                if eval_nonzero == False:
+                    eval_nonzero = True
+                    begin_point = i
+            else: # eval_res == 0
+                if eval_nonzero == True:
+                    res_field.append((begin_point, i))
+                    eval_nonzero = False
+
+        if eval_nonzero == True:
+            res_field.append((begin_point, -1)) # begin_point, +inf
+
+        print_str = ""
+
+        for i in res_field:
+            bp = i[0]
+            ep = i[1]
+
+            if ep != -1:
+                print_str += "[%d, %d) " % (bp, ep)
+            else:
+                print_str += "[%d, +inf)" % (bp)
+
+        print(print_str)
+
+        return 
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_s(self, opts): # search condition
+        self.do_search(opts)
+
+        return 
+
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_reorder(self, opts): # search condition
+        new_order_str = opts.split(" ")
+        spy_list_len = len(self.spy_sig_list)
+        new_order_num = []
+        ori_order_num = [i for i in range(spy_list_len)]
+
+        for i in new_order_str:
+            try:
+                val = int(i)
+
+                if val < -spy_list_len or val >= spy_list_len:
+                    print("Argument out of index:", i)
+
+                    return 
+
+                new_order_num.append(val)
+                ori_order_num[val] = spy_list_len
+            except Exception as e:
+                print(e, ": Wrong parameter")
+
+                return
+
+        
+        for i in ori_order_num:
+            if i != spy_list_len:
+                new_order_num.append(i)
+        
+        new_spy_sig_list = []
+
+        for i in new_order_num:
+            new_spy_sig_list.append(self.spy_sig_list[i])
+        
+        self.spy_sig_list = new_spy_sig_list
+        return 
+
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    def do_exit(self, opts):
+        sys.exit(0)
+    
+    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
+    def do_e(self, opts):
+        self.do_exit(opts)
+    
+    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
+    def do_quit(self, opts):
+        self.do_exit(opts)
+    
+    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
+    def do_q(self, opts):
+        self.do_exit(opts)
+
+if __name__ == '__main__':
+    app = vsh()
+    app.cmdloop()
