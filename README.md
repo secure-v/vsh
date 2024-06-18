@@ -12,7 +12,7 @@ pip install cmd2
 ```
 2. 安装方法（项目默认放置到 ~/eda/vsh）：
 ```shell
-make install # 注意：如果您的默认 shell 不是 zsh，请使用 make install-zsh
+make install # 注意：如果您的默认 shell 是 zsh，请使用 make install-zsh
 cd ~/eda/vsh/vsh # 默认安装路径
 # 若想要实现命令行直接启动 vsh，请将 ~/eda/vsh/ 加入到环境变量 PATH 当中（默认）；
 ```
