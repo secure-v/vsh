@@ -8,6 +8,7 @@ install:
 	
 	pip install pyDigitalWaveTools
 	pip install cmd2
+	pip install capstone
 	chmod +x vsh.py
 	mkdir -p ~/eda/vsh
 	cp vsh.py ~/eda/vsh/vsh
@@ -20,6 +21,7 @@ install:
 install-zsh:
 	pip install pyDigitalWaveTools
 	pip install cmd2
+	pip install capstone
 	chmod +x vsh.py
 	mkdir -p ~/eda/vsh
 	cp vsh.py ~/eda/vsh/vsh
