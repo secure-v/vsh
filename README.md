@@ -117,6 +117,7 @@ vsh> load vcd_example/gate.vcd
 python vsh.py "sfl" "load vcd_example/curva_wave.vcd" "cm TOP" "t" "add *" "bd -arv64 -sinstr" "show" "exit"
 ```
 ![信号绑定到反汇编器并显示](./image/disasm.png)
+
 4. 通过绑定宏定义组，显示信号的宏而非值（clk 信号显示为 HIGH / LOW 以表示 1 / 0）：
 ```shell
 python vsh.py "sfl" "load vcd_example/curva_wave.vcd" "cm TOP" "add *" "mg -mHIGH&LOW -v1&0 -nCLK" "bm -nCLK -sclk" "show" "exit"
