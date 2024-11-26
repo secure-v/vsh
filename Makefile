@@ -4,10 +4,11 @@ all: install
 
 SHELLRC = bashrc
 
+
 install:
-	
 	pip install pyDigitalWaveTools
 	pip install cmd2
+	pip install capstone
 	chmod +x vsh.py
 	mkdir -p ~/eda/vsh
 	cp vsh.py ~/eda/vsh/vsh
@@ -17,9 +18,11 @@ install:
 	bash -c "source ~/.$(SHELLRC)"
 	@bash -c "source ~/.$(SHELLRC)"
 
+
 install-zsh:
 	pip install pyDigitalWaveTools
 	pip install cmd2
+	pip install capstone
 	chmod +x vsh.py
 	mkdir -p ~/eda/vsh
 	cp vsh.py ~/eda/vsh/vsh
@@ -27,7 +30,6 @@ install-zsh:
 	sed -i '/eda\/vsh/d' ~/.zshrc
 	echo 'export PATH="$$HOME/eda/vsh/:$$PATH"' >> ~/.zshrc
 	@zsh ~/.zshrc
-
 
 
 uninstall:

@@ -7,13 +7,17 @@
 1. 部署 VSH 的环境需求（Makefile 可一键完成）：
 ```
 python3
+pip
+# 国内用户建议配置清华源
+pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 pip install pyDigitalWaveTools
 pip install cmd2
+pip install capstone
 ```
 2. 安装方法（项目默认放置到 ~/eda/vsh）：
 ```shell
-make install # 注意：如果您的默认 shell 不是 zsh，请使用 make install-zsh
-cd ~/eda/vsh/vsh # 默认安装路径
+make install # 注意：如果您的默认 shell 是 zsh，请使用 make install-zsh
+cd ~/eda/vsh/ # 默认安装路径
 # 若想要实现命令行直接启动 vsh，请将 ~/eda/vsh/ 加入到环境变量 PATH 当中（默认）；
 ```
 
@@ -28,7 +32,7 @@ cd ~/eda/vsh/vsh # 默认安装路径
 8. t：无参数时显示当前显示波形的时间起点，有整数参数 n 输入时，将 t 修改为 t + n。
 9. search：对指定的表达式进行分析，打印出该表达式成立的时间区间。
 10. conv：对参数（二进制/八进制/十进制/十六进制的自然数）进行进制转换。
-11. slf: 当参数为 0 / 其他 时，关闭 / 启用 显示单比特信号电平状态功能。
+11. sfl: 当参数为 0 / 其他 时，关闭 / 启用 显示单比特信号电平状态功能。
 ```shell
 python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 ```
@@ -46,12 +50,34 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 3    a 1 /TOP
 4    y 1 /TOP
 ```
-13. 目前支持的所有命令（包括 cmd 内置命令）：
+13. disasm：反汇编功能（默认为 RV64G 汇编，目前仅支持 RV32 / RV64）：
+```
+/TOP > disasm 0x17010001
+auipc sp, 0x1000
+/TOP > disasm -arv32 0x17010032
+auipc sp, 0x32000
+```
+14. mg：设置一组宏定义：
+```
+# 设置一组名称为 bus_state 的宏定义：STATE_IDLE == 0、STATE_START == 1、STATE_FINISH == 2、STATE_BUSY == 3
+mg -mSTATE_IDLE&STATE_START&STATE_FINISH&STATE_BUSY -v0&1&2&3 -n bus_state
+```
+15. bm：将一个观察列表中的信号绑定到一组宏定义（从而可以在显示时采用宏定义进行显示）：
+```
+# 将名称为 state 的信号绑定到名称为 bus_state 的宏定义组
+bm -nbus_state -sstate
+```
+16. bd：将信号绑定到指定架构的反汇编器（若不指定则绑定到 RV64 反汇编器）：
+```
+将名称为 instr 的信号绑定到 rv32 反汇编器
+bd -arv32 -sinstr
+```
+17. 目前支持的所有命令（包括 cmd 内置命令）：
 ```shell
 Custom Commands
 ===============
-add  conv  e     intro  list  pwm  quit     s       sfl   t
-cm   del   exit  l      load  q    reorder  search  show
+add  bm  conv  disasm  exit   l     load  pwm  quit     s       sfl   t
+bd   cm  del   e       intro  list  mg    q    reorder  search  show
 
 cmd2 Built-in Commands
 ======================
@@ -89,6 +115,17 @@ vsh> load vcd_example/gate.vcd
 [0, 1) [4, 5)
 # 该结果说明，在 t = 0 和 t = 4 两个时间点上，y == 1 的条件成立；
 ```
+3. 通过反汇编器显示指令的具体内容：
+```shell
+python vsh.py "sfl" "load vcd_example/curva_wave.vcd" "cm TOP" "t" "add *" "bd -arv64 -sinstr" "show" "exit"
+```
+![信号绑定到反汇编器并显示](./image/disasm.png)
+
+4. 通过绑定宏定义组，显示信号的宏而非值（clk 信号显示为 HIGH / LOW 以表示 1 / 0）：
+```shell
+python vsh.py "sfl" "load vcd_example/curva_wave.vcd" "cm TOP" "add *" "mg -mHIGH&LOW -v1&0 -nCLK" "bm -nCLK -sclk" "show" "exit"
+```
+![信号绑定到宏定义组并显示](./image/macro_display.png)
 
 ## 注意事项
 1. 在加载 vcd 文件成功以后，prompt 会变为 /，此时代表目前在根模块，即 TOP 模块的父模块，通过 cm TOP 命令即可进入 TOP 模块。
@@ -143,11 +180,15 @@ rename i new_name         # 将标号为 i 的信号（信号已经在观察列�
 2. search 方法目前存在的问题：关于 @T 的表达式所形成的区间节点无法被纳入到 time_point_for_search 当中，从而出现问题，如 search "@T>3"，无法正确地分析出结果（结果应该为[3, +inf)），或许放弃在表达式中支持 @T，转而通过增加一个 -t 参数项以支持时间值的筛选更合适。
 
 ## BUG
-1. search BUG：
+1. [已清除] search BUG：
 ``` shell
 python vsh.py "sfl" "load vcd_example/gpu.vcd" "cm gpu" "add *" "show"  "s data_mem_read_data==0" "e"
 
 # wrong result
 [8475000, 8425000) [4550000, 5775000)
+
+# right result
+[25000, 4500000) [4550000, 5775000) [5825000, 8425000) [8475000, 9700000) [9750000, +inf)
 ```
+
 

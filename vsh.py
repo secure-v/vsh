@@ -27,6 +27,8 @@ from cmd2 import (
     style,
 )
 
+from capstone import *
+
 search_var_list = [] # the global list of signal name (while using search cmd)
 
 # -------------------------------- expression evaluation -------------------------------- #
@@ -265,7 +267,24 @@ add_argparser = Cmd2ArgumentParser()
 add_argparser.add_argument('-f', '--format', type=str, help='set display format of signal value')
 add_argparser.add_argument('word', nargs='?', help='signal name')
 
-icon = """======================================================================================================
+mg_argparser = Cmd2ArgumentParser()
+mg_argparser.add_argument('-m', '--macro', type=str, help='macro set')
+mg_argparser.add_argument('-v', '--value', type=str, help='macro value set')
+mg_argparser.add_argument('-n', '--name', type=str, help='name of macro group')
+
+bm_argparser = Cmd2ArgumentParser()
+bm_argparser.add_argument('-n', '--name', type=str, help='name of macro group')
+bm_argparser.add_argument('-s', '--signal_name', type=str, help='signal to bond')
+
+bd_argparser = Cmd2ArgumentParser()
+bd_argparser.add_argument('-s', '--signal_name', type=str, help='signal to bond')
+bd_argparser.add_argument('-a', '--architecture', type=str, help='bond signal to disassembler with certain architecture')
+
+disasm_argparser = Cmd2ArgumentParser()
+disasm_argparser.add_argument('-a', '--architecture', type=str, help='set architecture')
+disasm_argparser.add_argument('word', nargs='?', help='data')
+
+icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
 ||     ......@@@@@@@@@@@@@                                                     @@@                  ||     
 ||      ........./     \@@@@@@@@@@                                           @@@@                   ||
@@ -298,6 +317,7 @@ class DISP_FORMAT(Enum):
     d = 2
     h = 3
 
+
 class vsh(cmd2.Cmd):
     CUSTOM_CATEGORY = 'Custom Commands'
     def __init__(self):
@@ -320,6 +340,11 @@ class vsh(cmd2.Cmd):
         self.t = 0
         self.spy_sig_list = [] # [(VcdVarParsingInfo, time_val, format, color)]
         self.shadow_for_logic = False # do not show the signal value when wire length == 1
+
+        self.CS_ARCH = CS_ARCH_RISCV
+        self.CS_MODE = CS_MODE_RISCV64
+
+        self.macro_map = {}
 
         fg_colors = [c.name.lower() for c in Fg]
         self.add_settable(
@@ -628,6 +653,79 @@ class vsh(cmd2.Cmd):
         
         return res
 
+    
+    def digit_to_instr(self, val_list, arch_mode):
+        res = []
+
+        for i in val_list:
+            bin_str = i
+            val_str = ""
+
+            if bin_str[0] == 'z' or bin_str[0] == 'x':
+                res += [bin_str]
+                continue
+
+            if i[0] == 'b':
+                bin_str = i[1:]
+
+                if bin_str[0] == 'z' or bin_str[0] == 'x':
+                    res += [bin_str]
+                    continue
+
+            val_str = self.disasm_data(int(bin_str, 2), arch_mode)
+            
+            if (len(val_str) == 0): # invalid instruction
+                res += [hex(int(bin_str, 2))[2:]]
+            else:
+                res += [val_str]
+        
+        return res
+
+
+    def digital_to_macro(self, val_list, macro_map):
+        res = []
+
+        for i in val_list:
+            bin_str = i
+            val_str = ""
+
+            if bin_str[0] == 'z' or bin_str[0] == 'x':
+                res += [bin_str]
+                continue
+
+            if i[0] == 'b':
+                bin_str = i[1:]
+
+                if bin_str[0] == 'z' or bin_str[0] == 'x':
+                    res += [bin_str]
+                    continue
+
+            val_str = macro_map.get(int(bin_str, 2))
+
+            if (val_str == None):
+                res += [hex(int(bin_str, 2))[2:]]
+            else:
+                res += [val_str]
+        
+        return res
+
+
+    def disasm_data(self, value, arch_mode = None):
+        value_bytes = value.to_bytes(length = 4, byteorder = 'little', signed = False)
+        md = Cs(self.CS_ARCH, self.CS_MODE)
+
+        if arch_mode:
+            md = Cs(arch_mode[0], arch_mode[1])
+
+        disasm_res = md.disasm(value_bytes, 0)
+        res = ""
+
+        for i in disasm_res: # the first instruction
+            res = "%s %s" % (i.mnemonic, i.op_str)
+
+            return res
+
+        return res
 
     def show_sig(self):
         width = os.get_terminal_size().columns
@@ -646,7 +744,11 @@ class vsh(cmd2.Cmd):
         for i in self.spy_sig_list:
             sig_w = 0
 
-            if i[2] == DISP_FORMAT.b:
+            if isinstance (i[3], tuple): # need disasm
+                sig_w = 24
+            elif isinstance (i[3], dict): # macro dict
+                sig_w = max([len(p) for p in i[3].values()])
+            elif i[2] == DISP_FORMAT.b:
                 sig_w = i[0].width + 2
             elif i[2] == DISP_FORMAT.o or i[2] == DISP_FORMAT.d:
                 sig_w = int((i[0].width + 2) / 3) + 2
@@ -674,11 +776,12 @@ class vsh(cmd2.Cmd):
         print("-" * len(t_str))
         print(t_str)
         print("-" * len(t_str))
-        
+
         # display the signal
         for i in self.spy_sig_list:
             v = i[0]
             sig_time_val_list = None
+            sfl_tmp = self.shadow_for_logic
 
             if isinstance(v.vcdId, list):
                 sig_time_val_list = v.vcdId
@@ -687,7 +790,14 @@ class vsh(cmd2.Cmd):
 
             val_list = self.search_val(tmax, sig_time_val_list)
             fmt = i[2]
-            val_list = self.digit_conv(val_list, fmt)
+            
+            if isinstance (i[3], tuple): # need disasm
+                val_list = self.digit_to_instr(val_list, i[3])
+            elif isinstance (i[3], dict): # macro dict
+                self.shadow_for_logic = False
+                val_list = self.digital_to_macro(val_list, i[3])
+            else:
+                val_list = self.digit_conv(val_list, fmt)
 
             suffix = '[H]'
 
@@ -699,6 +809,7 @@ class vsh(cmd2.Cmd):
                 suffix = '[D]'
 
             sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width)
+            self.shadow_for_logic = sfl_tmp
             print(style(sig_str, fg=i[1][0], bg=i[1][1], bold=i[1][2]))
             
         
@@ -717,7 +828,7 @@ class vsh(cmd2.Cmd):
         return 
 
     @cmd2.with_category(CUSTOM_CATEGORY)
-    @with_argparser(add_argparser) # TODO: foreground / background / bold
+    @with_argparser(add_argparser)
     def do_add(self, opts):
         if opts.word == "":
             return 
@@ -746,13 +857,14 @@ class vsh(cmd2.Cmd):
         if opts.word == "*":
             for k, v in mod.items():
                 if isinstance(v, VcdVarParsingInfo):
-                    self.spy_sig_list += [(v, (foreground, background, bold), fmt)]
+                    # (signal_object, (foreground_color, background_color, is_bold), macro_dictionary)
+                    self.spy_sig_list += [(v, (foreground, background, bold), fmt, None)]
             
             return
 
         for k, v in mod.items():
             if v.name == opts.word and isinstance(v, VcdVarParsingInfo):
-                self.spy_sig_list += [(v, (foreground, background, bold), fmt)]
+                self.spy_sig_list += [(v, (foreground, background, bold), fmt, None)]
                 
         return 
     
@@ -800,7 +912,9 @@ class vsh(cmd2.Cmd):
             except Exception as e:
                 print("Invalid number:", opts)
                 return
-        
+        else:
+            val = int(opts)
+
         print("BIN:", bin(val)[2:])
         print("OCT:", oct(val)[2:])
         print("DEC:", val)
@@ -871,6 +985,7 @@ class vsh(cmd2.Cmd):
         begin_point = 0
         eval_nonzero = False
         res_field = []
+        time_point_for_search = sorted(time_point_for_search)
         
         for i in time_point_for_search:
             var_val_dict = {} # var value in a certain time point
@@ -933,7 +1048,7 @@ class vsh(cmd2.Cmd):
 
     
     @cmd2.with_category(CUSTOM_CATEGORY)
-    def do_reorder(self, opts): # search condition
+    def do_reorder(self, opts):
         new_order_str = opts.split(" ")
         spy_list_len = len(self.spy_sig_list)
         new_order_num = []
@@ -968,7 +1083,172 @@ class vsh(cmd2.Cmd):
         self.spy_sig_list = new_spy_sig_list
         return 
 
+
+    def str_to_int(self, val_str):
+        val = 0
+
+        if val_str.isdigit() == False:
+            if len(val_str) <= 2:
+                print("Invalid number:", val_str)
+                return
+            
+            try:
+                if val_str[0:2] == '0x':
+                    val = int(val_str[2:], 16)
+                elif val_str[0:2] == '0b':
+                    val = int(val_str[2:], 2)
+                elif val_str[0:2] == '0o':
+                    val = int(val_str[2:], 8)
+                else:
+                    print("Invalid number:", val_str)
+                    return
+            except Exception as e:
+                print("Invalid number:", val_str)
+                return
+        else:
+            val = int(val_str)
+
+        return val
+
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(mg_argparser)
+    def do_mg(self, opts):
+        macro_list = opts.macro.split('&')
+        macro_value = opts.value.split('&')
+
+        if len(macro_list) != len(macro_value):
+            print("Mismatch macro and value!")
+
+            return 
+        elif len(macro_list) == 0:
+            print("No macro:", opts.macro)
+
+            return 
+
+        value_list = []
+
+        for i in macro_value:
+            value_list += [self.str_to_int(i)]
+        
+        if len(macro_list) != len(value_list):
+            print("Mismatch macro and value!")
+
+            return 
+        
+        self.macro_map[opts.name] = {}
+
+        for i, j in zip(macro_list, value_list):
+            self.macro_map[opts.name][j] = i
+
+        print(opts.name, ":", self.macro_map[opts.name])
+
+        return 
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(bm_argparser)
+    def do_bm(self, opts):
+        if self.macro_map.get(opts.name) == None:
+            print("No such macro group:", opts.name)
+
+            return 
+
+        index = 0
+        bm_index_list = []
+
+        for i in self.spy_sig_list:
+            if i[0].name == opts.signal_name:
+                bm_index_list += [index]
+            
+            index += 1
+        
+        for i in bm_index_list:
+            self.spy_sig_list[i] = self.spy_sig_list[i][:3] + (self.macro_map[opts.name], ) + self.spy_sig_list[i][4:]
+            print(i, ":", opts.signal_name, "<>", opts.name)
+
+        if len(bm_index_list) == 0:
+            print("No such signal:", opts.signal_name)
+
+        return 
     
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(bd_argparser)
+    def do_bd(self, opts):
+        cs_arch = 0
+        cs_mode = 0
+        
+        if opts.architecture == 'rv32' or opts.architecture == 'RV32':
+            cs_arch = CS_ARCH_RISCV
+            cs_mode = CS_MODE_RISCV32
+        elif opts.architecture == 'rv64' or opts.architecture == 'RV64':
+            cs_arch = CS_ARCH_RISCV
+            cs_mode = CS_MODE_RISCV64
+        else:
+            print("Not support such architecture:", opts.architecture)
+
+            return 
+
+        index = 0
+        bm_index_list = []
+
+        for i in self.spy_sig_list:
+            if i[0].name == opts.signal_name:
+                bm_index_list += [index]
+            
+            index += 1
+        
+        for i in bm_index_list:
+            self.spy_sig_list[i] = self.spy_sig_list[i][:3] + ((cs_arch, cs_mode), ) + self.spy_sig_list[i][4:]
+            print(i, ":", opts.signal_name, "<>", opts.architecture)
+
+        if len(bm_index_list) == 0:
+            print("No such signal:", opts.signal_name)
+
+        return 
+    
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(disasm_argparser)
+    def do_disasm(self, opts):
+        val = 0
+        cs_mode = self.CS_MODE
+        cs_arch = self.CS_ARCH
+        
+        if opts.word.isdigit() == False:
+            if len(opts.word) <= 2:
+                print("Invalid input:", opts.word)
+                return
+            
+            try:
+                if opts.word[0:2] == '0x':
+                    val = int(opts.word[2:], 16)
+                elif opts.word[0:2] == '0b':
+                    val = int(opts.word[2:], 2)
+                elif opts.word[0:2] == '0o':
+                    val = int(opts.word[2:], 8)
+                else:
+                    print("Invalid input:", opts.word)
+                    return
+            except Exception as e:
+                print("Invalid input:", opts.word)
+                return
+        else:
+            val = int(opts.word)
+        
+        if opts.architecture == "rv32" or opts.architecture == "RV32": 
+            self.CS_ARCH = CS_ARCH_RISCV
+            self.CS_MODE = CS_MODE_RISCV32
+        elif opts.architecture == "rv64" or opts.architecture == "RV64": 
+            self.CS_ARCH = CS_ARCH_RISCV
+            self.CS_MODE = CS_MODE_RISCV64
+
+        instr = self.disasm_data(val)
+        self.CS_MODE = cs_mode
+        self.CS_ARCH = cs_arch
+        print(instr)
+
+        return
+#########################################################################    
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_exit(self, opts):
         sys.exit(0)
