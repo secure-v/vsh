@@ -127,6 +127,20 @@ python vsh.py "sfl" "load vcd_example/curva_wave.vcd" "cm TOP" "add *" "mg -mHIG
 ```
 ![信号绑定到宏定义组并显示](./image/macro_display.png)
 
+5. **通常定位 RTL 中的 BUG 需要在 vsh 中执行一系列的操作；而在下一次打开 vsh 时，我们希望能够重新定位该处 BUG，这时对命令历史进行导出以形成启动文件将有助于提高调试效率：**
+```shell
+# 定义 save 命令，该命令可以将本次调试操作的所有命令保存到一个以时间戳命名的启动文件
+vsh> alias create save history "|" sed 's/^ *[0-9]*[ ]*//' ">" .vsh_start_$(date +"%Y_%m_%d_%H_%M_%S")
+# 此后执行若干调试操作
+vsh> ...
+# 保存操作为启动文件
+vsh> save
+```
+**启动文件被保存后，可以通过命令行方式执行：**
+```shell
+vsh "run_script .vsh_start_up_2025_01_01_19_00_00" "exit"
+```
+
 ## 注意事项
 1. 在加载 vcd 文件成功以后，prompt 会变为 /，此时代表目前在根模块，即 TOP 模块的父模块，通过 cm TOP 命令即可进入 TOP 模块。
 2. 显示的波形文件中，\ / 为分隔符，无任何含义；信号名后的 [H] 代表数据当前的显示格式为十六进制（在添加信号进入观察列表时，可以通过 add -f b/o/d/h signal_name 设置）。
@@ -180,15 +194,5 @@ rename i new_name         # 将标号为 i 的信号（信号已经在观察列�
 2. search 方法目前存在的问题：关于 @T 的表达式所形成的区间节点无法被纳入到 time_point_for_search 当中，从而出现问题，如 search "@T>3"，无法正确地分析出结果（结果应该为[3, +inf)），或许放弃在表达式中支持 @T，转而通过增加一个 -t 参数项以支持时间值的筛选更合适。
 
 ## BUG
-1. [已清除] search BUG：
-``` shell
-python vsh.py "sfl" "load vcd_example/gpu.vcd" "cm gpu" "add *" "show"  "s data_mem_read_data==0" "e"
-
-# wrong result
-[8475000, 8425000) [4550000, 5775000)
-
-# right result
-[25000, 4500000) [4550000, 5775000) [5825000, 8425000) [8475000, 9700000) [9750000, +inf)
-```
-
+1. 待测试 ... 
 
