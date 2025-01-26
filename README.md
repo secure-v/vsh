@@ -25,7 +25,7 @@ cd ~/eda/vsh/ # 默认安装路径
 1. load：加载 VCD 文件。
 2. pwm：显示当前工作模块所在的层次，显示方式与 Linux 文件系统路径名一致。
 3. cm：改变当前工作模块。
-4. add：添加信号到观察列表，-f 参数可指定信号显示时的数据显示方式（b/o/d/h，即 bin/oct/dec/hex），若不指定，默认的数据显示方式为十六进制。
+4. add：添加信号到观察列表，-f 参数可指定信号显示时的数据显示方式（b/o/d/h，即 bin/oct/dec/hex），若不指定，默认的数据显示方式为十六进制；-bg 参数指定背景色；-fg 参数指定前景色；-m 指定显示样式（0：常规；1: 加粗；2：淡色；3：斜体；4：下划线；5：闪烁等，注：与终端文本样式设置一致）。
 5. del：删除观察列表中对应信号名的信号。
 6. show：显示观察列表中的信号波形，其中第一列为波形的时间参数。
 7. list: 显示当前模块下的信号和子模块，-s 参数用于显示加入到观察列表的信号信息（信号名 位宽 信号所属的层次）。
@@ -140,6 +140,17 @@ vsh> save
 ```shell
 vsh "run_script .vsh_start_up_2025_01_01_19_00_00" "exit"
 ```
+6. 设置显示时的信号颜色：
+```python
+python vsh.py "load vcd_example/curva_wave.vcd" "cm TOP" "add clk -fg 0x194235" "add data_addr -fg 0x594235" "add instr -fg 0x594285" "add wdata -fg 0xe9f235" "show" "list -s"
+```
+7. 修改显示时的信号颜色：
+```shell
+# python vsh.py "load vcd_example/curva_wave.vcd" "cm TOP" "add clk -fg 0x194235" "add data_addr -fg 0x594235" "add instr -fg 0x594285" "add wdata -fg 0xe9f235" "show"
+vsh> color -fg 0x323672 -i 3
+vsh> show
+vsh> list -s
+```
 
 ## 注意事项
 1. 在加载 vcd 文件成功以后，prompt 会变为 /，此时代表目前在根模块，即 TOP 模块的父模块，通过 cm TOP 命令即可进入 TOP 模块。
@@ -174,7 +185,6 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 8. list -s 命令显示信号名和所属的模块层次。
 9. 拟添加和完善的命令：
 ```shell
-color index color_name    # 将某个信号显示的颜色进行变更；
 marker t0                 # 在时间轴 t == t0 上设置一个标号
 marker -n marker_name t0  # 在时间轴 t == t0 上设置一个标号，将该标号命名为 marker_name 
 marker -d n               # 删除 index 为 n 的标号
@@ -195,4 +205,7 @@ rename i new_name         # 将标号为 i 的信号（信号已经在观察列�
 
 ## BUG
 1. 待测试 ... 
+
+## 更新说明
+1. 添加了对信号颜色进行设置与修改的支持；
 

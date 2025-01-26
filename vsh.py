@@ -265,6 +265,9 @@ list_argparser.add_argument('word', nargs='?', help='path of submodule')
 
 add_argparser = Cmd2ArgumentParser()
 add_argparser.add_argument('-f', '--format', type=str, help='set display format of signal value')
+add_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color')
+add_argparser.add_argument('-bg', '--background', type=str, help='set background color')
+add_argparser.add_argument('-m', '--mode', type=str, help='set display mode')
 add_argparser.add_argument('word', nargs='?', help='signal name')
 
 mg_argparser = Cmd2ArgumentParser()
@@ -283,6 +286,13 @@ bd_argparser.add_argument('-a', '--architecture', type=str, help='bond signal to
 disasm_argparser = Cmd2ArgumentParser()
 disasm_argparser.add_argument('-a', '--architecture', type=str, help='set architecture')
 disasm_argparser.add_argument('word', nargs='?', help='data')
+
+color_argparser = Cmd2ArgumentParser()
+color_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color')
+color_argparser.add_argument('-bg', '--background', type=str, help='set background color')
+color_argparser.add_argument('-m', '--mode', type=str, help='set display mode')
+color_argparser.add_argument('-i', '--index', type=str, help='the index of the signal')
+color_argparser.add_argument('word', nargs='?', help='signal name')
 
 icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
@@ -317,6 +327,36 @@ class DISP_FORMAT(Enum):
     d = 2
     h = 3
 
+
+def render(strVal, *, fg = (255, 255, 255), bg = (0, 0, 0), mode = 0):
+    if bg == None:
+        res_str = f"\x1b[{mode}m\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m{strVal}\x1b[0m"
+    else:
+        res_str = f"\x1b[{mode}m\x1b[38;2;{fg[0]};{fg[1]};{fg[2]}m\x1b[48;2;{bg[0]};{bg[1]};{bg[2]}m{strVal}\x1b[0m"
+    
+    return res_str
+
+
+def str2num(numStr):
+    val = None
+
+    try:
+        if numStr[0:2] == '0x':
+            val = int(numStr[2:], 16)
+        elif numStr[0:2] == '0b':
+            val = int(numStr[2:], 2)
+        elif numStr[0:2] == '0o':
+            val = int(numStr[2:], 8)
+        else:
+            val = int(numStr)
+        
+        return val
+    except Exception as e:
+        print("Invalid number:", numStr)
+        return None
+    
+    return val
+    
 
 class vsh(cmd2.Cmd):
     CUSTOM_CATEGORY = 'Custom Commands'
@@ -395,7 +435,7 @@ class vsh(cmd2.Cmd):
                     mod_hier = "/" + mod.name + mod_hier
                     mod = mod.parent
 
-                print("%-4d" % index_num, i[0].name, i[0].width, mod_hier)
+                print((render(("%-4d %s %d %s" % (index_num, i[0].name, i[0].width, mod_hier)), fg = i[1][0], bg = i[1][1], mode = i[1][2])))
                 index_num += 1
     
             return 
@@ -556,16 +596,19 @@ class vsh(cmd2.Cmd):
 
         return 
 
-    def align_sig(self, side_w, max_sig_w, str_list, sig_width=None):
+    def align_sig(self, side_w, max_sig_w, str_list, sig_width=None, fg = (255, 255, 255), bg = None, mode = 0):
         res = str_list[0].ljust(side_w, ' ')
         val_str_list = [(str_list[1], 1)]
 
         if self.shadow_for_logic and sig_width == 1:
+            if bg == None:
+                bg = (135, 170, 104) # WoW
+
             for i in str_list[1:]:
                 if i == '1':
-                    res += "\033[4;27;44m \033[0m" * max_sig_w
+                    res += render(" " * max_sig_w, fg = fg, bg = bg, mode = mode)
                 else:
-                    res += "\033[4m_\033[0m" * max_sig_w
+                    res += render("_" * max_sig_w, fg = fg, bg = None, mode = mode)
             
             return res
 
@@ -772,7 +815,7 @@ class vsh(cmd2.Cmd):
             t_list += ["%d" % i]
         
         # display the title (T)
-        t_str = self.align_sig(side_w, max_sig_w, t_list)
+        t_str = self.align_sig(side_w, max_sig_w, t_list, (255, 255, 255), None, 0)
         print("-" * len(t_str))
         print(t_str)
         print("-" * len(t_str))
@@ -808,9 +851,10 @@ class vsh(cmd2.Cmd):
             elif fmt == DISP_FORMAT.d:
                 suffix = '[D]'
 
-            sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width)
+            sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width, i[1][0], i[1][1], i[1][2])
             self.shadow_for_logic = sfl_tmp
-            print(style(sig_str, fg=i[1][0], bg=i[1][1], bold=i[1][2]))
+            # print(style(sig_str, fg=i[1][0], bg=i[1][1], bold=i[1][2]))
+            print(render(sig_str, fg = i[1][0], bg = i[1][1], mode = i[1][2]))
             
         
         print("=" * len(t_str))
@@ -836,9 +880,9 @@ class vsh(cmd2.Cmd):
         mod = self.cur_mod.children
         
         fmt = DISP_FORMAT.h
-        foreground = Fg.BLUE
+        foreground = (255, 255, 255)
         background = None
-        bold = False
+        mode = 0
 
         if opts.format == "b" or opts.format == "B" or opts.format == "bin" or opts.format == "BIN":
             fmt = DISP_FORMAT.b
@@ -854,20 +898,95 @@ class vsh(cmd2.Cmd):
             print("Error format:", opts.format)
             return
 
+        if opts.foreground:
+            fgVal = str2num(opts.foreground)
+
+            if fgVal == None:
+                return 
+
+            foreground = ((fgVal >> 16) & 255, (fgVal >> 8) & 255, (fgVal >> 0) & 255)
+        
+        if opts.background:
+            bgVal = str2num(opts.background)
+        
+            if bgVal == None:
+                return 
+
+            background = ((bgVal >> 16) & 255, (bgVal >> 8) & 255, (bgVal >> 0) & 255)
+
+        if opts.mode:
+            modeVal = str2num(opts.mode)
+
+            if modeVal == None:
+                return 
+
+            mode = modeVal
+            
+
         if opts.word == "*":
             for k, v in mod.items():
                 if isinstance(v, VcdVarParsingInfo):
-                    # (signal_object, (foreground_color, background_color, is_bold), macro_dictionary)
-                    self.spy_sig_list += [(v, (foreground, background, bold), fmt, None)]
+                    # (signal_object, (foreground_color, background_color, mode), macro_dictionary)
+                    self.spy_sig_list += [(v, (foreground, background, mode), fmt, None)]
             
             return
 
         for k, v in mod.items():
             if v.name == opts.word and isinstance(v, VcdVarParsingInfo):
-                self.spy_sig_list += [(v, (foreground, background, bold), fmt, None)]
+                self.spy_sig_list += [(v, (foreground, background, mode), fmt, None)]
                 
         return 
     
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(color_argparser)
+    def do_color(self, opts):
+        foreground = (255, 255, 255)
+        background = None
+        mode = 0
+
+        if opts.index:
+            index = str2num(opts.index)
+
+            if index == None:
+                return 
+            
+            foreground = self.spy_sig_list[index][1][0]
+            background = self.spy_sig_list[index][1][1]
+            mode = self.spy_sig_list[index][1][2]
+        else:
+            print("Need index of the signal to change its color!")
+            return
+
+        if opts.foreground:
+            fgVal = str2num(opts.foreground)
+
+            if fgVal == None:
+                return 
+
+            foreground = ((fgVal >> 16) & 255, (fgVal >> 8) & 255, (fgVal >> 0) & 255)
+        
+        if opts.background:
+            bgVal = str2num(opts.background)
+        
+            if bgVal == None:
+                return 
+
+            background = ((bgVal >> 16) & 255, (bgVal >> 8) & 255, (bgVal >> 0) & 255)
+
+        if opts.mode:
+            modeVal = str2num(opts.mode)
+
+            if modeVal == None:
+                return 
+
+            mode = modeVal
+
+        self.spy_sig_list[index] = (self.spy_sig_list[index][0], (foreground, background, mode), self.spy_sig_list[index][2], self.spy_sig_list[index][3])
+
+        return 
+
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_del(self, opts):
         if opts == "":
