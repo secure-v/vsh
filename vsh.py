@@ -12,6 +12,7 @@
 import os
 import sys
 import bisect
+import random
 import datetime
 from enum import Enum
 from pyDigitalWaveTools.vcd.parser import VcdParser
@@ -289,7 +290,9 @@ disasm_argparser.add_argument('word', nargs='?', help='data')
 
 color_argparser = Cmd2ArgumentParser()
 color_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color')
+color_argparser.add_argument('-fgr', '--foreground_random', action='store_true', help='set foreground to a random color')
 color_argparser.add_argument('-bg', '--background', type=str, help='set background color')
+color_argparser.add_argument('-bgr', '--background_random', action='store_true', help='set background to a random color')
 color_argparser.add_argument('-m', '--mode', type=str, help='set display mode')
 color_argparser.add_argument('-i', '--index', type=str, help='the index of the signal')
 color_argparser.add_argument('word', nargs='?', help='signal name')
@@ -941,9 +944,11 @@ class vsh(cmd2.Cmd):
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(color_argparser)
     def do_color(self, opts):
-        foreground = (255, 255, 255)
+        foreground = None
         background = None
-        mode = 0
+        mode = None
+        index_list = []
+        index = None
 
         if opts.index:
             index = str2num(opts.index)
@@ -954,11 +959,25 @@ class vsh(cmd2.Cmd):
             foreground = self.spy_sig_list[index][1][0]
             background = self.spy_sig_list[index][1][1]
             mode = self.spy_sig_list[index][1][2]
+        elif opts.word:
+            j = 0
+
+            for i in self.spy_sig_list:
+                if i[0].name == opts.word:
+                    index_list += [j]
+                
+                j = j + 1
+            
+            if len(index_list) == 0:
+                print("Need the correct name of signal!")
+                return
         else:
             print("Need index of the signal to change its color!")
             return
 
-        if opts.foreground:
+        if opts.foreground_random:
+            foreground = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        elif opts.foreground:
             fgVal = str2num(opts.foreground)
 
             if fgVal == None:
@@ -966,7 +985,9 @@ class vsh(cmd2.Cmd):
 
             foreground = ((fgVal >> 16) & 255, (fgVal >> 8) & 255, (fgVal >> 0) & 255)
         
-        if opts.background:
+        if opts.background_random:
+            background = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        elif opts.background:
             bgVal = str2num(opts.background)
         
             if bgVal == None:
@@ -982,7 +1003,20 @@ class vsh(cmd2.Cmd):
 
             mode = modeVal
 
-        self.spy_sig_list[index] = (self.spy_sig_list[index][0], (foreground, background, mode), self.spy_sig_list[index][2], self.spy_sig_list[index][3])
+        if index != None:
+            self.spy_sig_list[index] = (self.spy_sig_list[index][0], (foreground, background, mode), self.spy_sig_list[index][2], self.spy_sig_list[index][3])
+
+        for index in index_list:
+            if foreground == None:
+                foreground = self.spy_sig_list[index][1][0]
+
+            if background == None:
+                background = self.spy_sig_list[index][1][1]
+            
+            if mode == None:
+                mode = self.spy_sig_list[index][1][2]
+
+            self.spy_sig_list[index] = (self.spy_sig_list[index][0], (foreground, background, mode), self.spy_sig_list[index][2], self.spy_sig_list[index][3])
 
         return 
 
