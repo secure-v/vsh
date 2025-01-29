@@ -310,6 +310,9 @@ marker_argparser.add_argument('-bgr', '--background_random', action='store_true'
 marker_argparser.add_argument('-m', '--mode', type=str, help='set display mode of the marker')
 marker_argparser.add_argument('word', nargs='?', help='marker name')
 
+t_argparser = Cmd2ArgumentParser()
+t_argparser.add_argument('-a', '--absolute', action='store_true', help='set value of the time point')
+t_argparser.add_argument('word', nargs='?', help='marker name')
 
 icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
@@ -404,6 +407,8 @@ class vsh(cmd2.Cmd):
         self.macro_map = {}
         self.marker_list = []
 
+        self.max_t = None
+
         fg_colors = [c.name.lower() for c in Fg]
         self.add_settable(
             cmd2.Settable('foreground_color', str, 'Foreground color to use with echo command', self, choices=fg_colors)
@@ -435,6 +440,17 @@ class vsh(cmd2.Cmd):
 
         self.prompt = "/ > "
         self.cur_mod = self.vcd.scope
+        max_time_point = -1
+
+        for sig in self.vcd.idcode2series.items():
+            for i in sig[1]:
+                if i[0] > max_time_point:
+                    max_time_point = i[0]
+
+        self.max_t = max_time_point
+        
+        ## reset values
+        self.spy_sig_list = [] # [(VcdVarParsingInfo, time_val, format, color)]
 
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(list_argparser)
@@ -610,25 +626,29 @@ class vsh(cmd2.Cmd):
         return 
     
     @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(t_argparser)
     def do_t(self, opts):
-        if opts == "":
-            print(self.t)
+        if (opts.word == "") or (opts.word == None):
+            print("CURRENT_TIME / MAX_TIME:", self.t, "/", self.max_t)
             return 
 
         res = 0
 
         try:
-            res = int(opts)
+            res = int(opts.word)
         except Exception as e:
             print (e, ": Wrong parameter")
             return
         
-        self.t += res
+        if opts.absolute:
+            self.t = res
+        else:
+            self.t += res
 
         if self.t < 0:
             self.t = 0
 
-        print(self.t)
+        print("CURRENT_TIME / MAX_TIME:", self.t, "/", self.max_t)
 
         return 
 
