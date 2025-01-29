@@ -262,6 +262,7 @@ class expr_eval:
 
 list_argparser = Cmd2ArgumentParser()
 list_argparser.add_argument('-s', '--signal_list', action='store_true', help='list current signals under spying')
+list_argparser.add_argument('-m', '--marker_list', action='store_true', help='list markers')
 list_argparser.add_argument('word', nargs='?', help='path of submodule')
 
 add_argparser = Cmd2ArgumentParser()
@@ -457,6 +458,15 @@ class vsh(cmd2.Cmd):
     
             return 
 
+        if opts.marker_list:
+            j = 0
+
+            for i in self.marker_list:
+                print("[%5d] %-20d: " % (j, i[1]) + render(i[0], fg = i[2][0], bg = i[2][1], mode = i[2][2]))
+                j += 1
+
+            return
+
         if self.cur_mod == None:
             return
         
@@ -489,6 +499,15 @@ class vsh(cmd2.Cmd):
                 index_num += 1
 
             return 
+
+        if opts.marker_list:
+            j = 0
+
+            for i in self.marker_list:
+                print("[%5d] %-20d: " % (j, i[1]) + render(i[0], fg = i[2][0], bg = i[2][1], mode = i[2][2]))
+                j += 1
+
+            return
 
         if self.cur_mod == None:
             return
@@ -891,7 +910,7 @@ class vsh(cmd2.Cmd):
                 if j[1] == i + self.t:
                     marker_display_list += [(i, j)]
 
-        marker_output_str_list = []
+        marker_output_str_list = [] # [(string0, current_layer0), ..., (stringN, current_layerN)]
 
         for i in marker_display_list:
             if i[0] == 0:
@@ -1154,7 +1173,7 @@ class vsh(cmd2.Cmd):
             flag = False
 
             for mk in self.marker_list:
-                if mk[0] == opts.word:
+                if (mk[0] == opts.word) or (mk[1] == time):
                     flag = True
                     break
 
