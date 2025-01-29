@@ -51,33 +51,36 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 4    y 1 /TOP
 ```
 13. disasm：反汇编功能（默认为 RV64G 汇编，目前仅支持 RV32 / RV64）：
-```
+```shell
 /TOP > disasm 0x17010001
 auipc sp, 0x1000
 /TOP > disasm -arv32 0x17010032
 auipc sp, 0x32000
 ```
 14. mg：设置一组宏定义：
-```
+```shell
 # 设置一组名称为 bus_state 的宏定义：STATE_IDLE == 0、STATE_START == 1、STATE_FINISH == 2、STATE_BUSY == 3
 mg -mSTATE_IDLE&STATE_START&STATE_FINISH&STATE_BUSY -v0&1&2&3 -n bus_state
 ```
 15. bm：将一个观察列表中的信号绑定到一组宏定义（从而可以在显示时采用宏定义进行显示）：
-```
+```shell
 # 将名称为 state 的信号绑定到名称为 bus_state 的宏定义组
 bm -nbus_state -sstate
 ```
 16. bd：将信号绑定到指定架构的反汇编器（若不指定则绑定到 RV64 反汇编器）：
-```
+```shell
 将名称为 instr 的信号绑定到 rv32 反汇编器
 bd -arv32 -sinstr
 ```
-17. 目前支持的所有命令（包括 cmd 内置命令）：
+17. color： 设置信号显示时的前景色（-fg）、背景色（-bg）、显示样式（-m），其中前景色 / 背景色，均使用六位的八进制数指定，如 0xff0000 为红色；如果想要设置一种随机的前景色 / 背景色，可通过 -fgr / -bgr 指定。
+18. marker：设置标号，-l 参数显示所有标号；-t 参数指定标号对应的时间点；-d 参数删除指定标号；-i 参数用于根据下标指定标号；-fg / -bg / -m 用于指定标号的颜色与样式；-fgr / -bgr 用于为标号设置随机的前景色 / 背景色。
+19. 目前支持的所有命令（包括 cmd 内置命令）：
 ```shell
 Custom Commands
 ===============
-add  bm  conv  disasm  exit   l     load  pwm  quit     s       sfl   t
-bd   cm  del   e       intro  list  mg    q    reorder  search  show
+add  cm     del     exit   list    mg   quit     search  t
+bd   color  disasm  intro  load    pwm  reorder  sfl
+bm   conv   e       l      marker  q    s        show
 
 cmd2 Built-in Commands
 ======================
@@ -151,6 +154,30 @@ vsh> color -fg 0x323672 -i 3
 vsh> show
 vsh> list -s
 ```
+8. 设置随机的背景 / 前景颜色：
+```shell
+vsh> color -fgr -i 3
+vsh> color -bgr -i 0
+vsh> show
+```
+9. 添加标号并显示（通过 -i 参数指定要删除、修改的某个 marker 的下标）：
+```shell
+# 在时间点 3 添加一个名称为 m0 的标号，设置随机的前景色
+vsh> marker -t 3 m0 -fgr
+
+# 修改标号 m0，使得其时间点变更为 4，并设置随机的前景色
+vsh> marker -t 4 m0 -fgr
+
+# 显示所有标号
+vsh> marker -l
+
+# 删除标号 m0
+vsh> marker -d m0
+vsh> marker -d -i 0
+
+# 演示
+python vsh.py "load vcd_example/curva_wave.vcd" "cm TOP" "add clk -fg 0x194235" "add data_addr -fg 0x594235" "add instr -fg 0x594285" "add wdata -fg 0xe9f235" "show" "list -s" "marker -t 0 a -fgr" "marker -t 1 b -fgr" "marker -t 2 c -fgr" "marker -t 3 d -fgr" "marker -t 5 e -fgr" "marker -t 6 f -fgr" "show"
+```
 
 ## 注意事项
 1. 在加载 vcd 文件成功以后，prompt 会变为 /，此时代表目前在根模块，即 TOP 模块的父模块，通过 cm TOP 命令即可进入 TOP 模块。
@@ -183,17 +210,9 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 6. 考虑改进 list 命令显示的格式：模块下不同类型的子节点（信号/子模块）显示不同的颜色；命令输出的内容一项占据了一行，可考虑将其改进为类似于 linux 的 ls 命令的显示格式。
 7. 该项目以脚本的形式启动，修改权限并通过一个 Makefile 将其复制到 /usr/local/bin 下更佳。
 8. list -s 命令显示信号名和所属的模块层次。
-9. 拟添加和完善的命令：
-```shell
-marker t0                 # 在时间轴 t == t0 上设置一个标号
-marker -n marker_name t0  # 在时间轴 t == t0 上设置一个标号，将该标号命名为 marker_name 
-marker -d n               # 删除 index 为 n 的标号
-marker -p n               # 显示 index 为 n 的标号信息，若 n 为 "*" 或不存在，则显示所有标号的信息
-rename i new_name         # 将标号为 i 的信号（信号已经在观察列表当中）重命名为 new_name
-```
-10. 命令的 help 信息有待完善。
-11. 添加英文版 readme.md。
-12. 显示信号支持 x / z 态，而搜索功能暂不支持 x / z 态。
+9. 命令的 help 信息有待完善。
+10. 添加英文版 readme.md。
+11. 显示信号支持 x / z 态，而搜索功能暂不支持 x / z 态。
 
 ## 开发者说明
 1. search 方法的实现机制：（注意，超过 vcd 文件最大时间的信号值，vsh 认为它保持了原值并一直持续到 +inf）
@@ -207,6 +226,5 @@ rename i new_name         # 将标号为 i 的信号（信号已经在观察列�
 1. 待测试 ... 
 
 ## 更新说明
-1. 支持设置随机颜色；
-2. 支持根据变量名设置颜色；
+1. 支持添加、修改、删除标号（marker）；
 

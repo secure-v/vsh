@@ -297,6 +297,19 @@ color_argparser.add_argument('-m', '--mode', type=str, help='set display mode')
 color_argparser.add_argument('-i', '--index', type=str, help='the index of the signal')
 color_argparser.add_argument('word', nargs='?', help='signal name')
 
+marker_argparser = Cmd2ArgumentParser()
+marker_argparser.add_argument('-d', '--delete', action='store_true', help='delete the marker')
+marker_argparser.add_argument('-l', '--list', action='store_true', help='list the markers')
+marker_argparser.add_argument('-i', '--index', type=str, help='index of the marker')
+marker_argparser.add_argument('-t', '--time', type=str, help='time of the marker')
+marker_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color of the marker')
+marker_argparser.add_argument('-fgr', '--foreground_random', action='store_true', help='set marker\'s foreground to a random color')
+marker_argparser.add_argument('-bg', '--background', type=str, help='set background color of the marker')
+marker_argparser.add_argument('-bgr', '--background_random', action='store_true', help='set marker\'s background to a random color')
+marker_argparser.add_argument('-m', '--mode', type=str, help='set display mode of the marker')
+marker_argparser.add_argument('word', nargs='?', help='marker name')
+
+
 icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
 ||     ......@@@@@@@@@@@@@                                                     @@@                  ||     
@@ -388,6 +401,7 @@ class vsh(cmd2.Cmd):
         self.CS_MODE = CS_MODE_RISCV64
 
         self.macro_map = {}
+        self.marker_list = []
 
         fg_colors = [c.name.lower() for c in Fg]
         self.add_settable(
@@ -785,6 +799,14 @@ class vsh(cmd2.Cmd):
             if name_w > side_w:
                 side_w = name_w
         
+
+        for j in self.marker_list:
+            marker_w = len(j[0])
+
+            if marker_w > side_w:
+                side_w = marker_w
+
+
         max_sig_w = 4
 
         for i in self.spy_sig_list:
@@ -858,9 +880,47 @@ class vsh(cmd2.Cmd):
             self.shadow_for_logic = sfl_tmp
             # print(style(sig_str, fg=i[1][0], bg=i[1][1], bold=i[1][2]))
             print(render(sig_str, fg = i[1][0], bg = i[1][1], mode = i[1][2]))
-            
-        
+
         print("=" * len(t_str))
+
+        # display the marker
+        marker_display_list = []
+
+        for i in range((len(t_list))):
+            for j in self.marker_list:
+                if j[1] == i + self.t:
+                    marker_display_list += [(i, j)]
+
+        marker_output_str_list = []
+
+        for i in marker_display_list:
+            if i[0] == 0:
+                marker_output_str_list += [(" " * side_w + render("\\", fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), 0)]
+                marker_output_str_list += [(" " * side_w + render("|", fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), 0)]
+                marker_output_str_list += [(render(i[1][0], fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]) + " " + render("-" * (side_w - len(i[1][0])), fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), 0)]
+            elif i[0] == (len(t_list) - 1):
+                for k in range(len(marker_output_str_list)):
+                    append_str = "/"
+
+                    if k != 0:
+                        append_str = "|"
+                    
+                    marker_output_str_list[k] = (marker_output_str_list[k][0] + " " * ((max_sig_w * (i[0] - marker_output_str_list[k][1]) - 2)) + render(append_str, fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), i[0])
+                    
+                marker_output_str_list += [(render(i[1][0], fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]) + " " + render("-" * (side_w  + max_sig_w * i[0] - len(i[1][0]) - 1), fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), i[0])]
+            else:
+                for k in range(len(marker_output_str_list)):
+                    append_str = "/\\"
+
+                    if k != 0:
+                        append_str = "||"
+                    
+                    marker_output_str_list[k] = (marker_output_str_list[k][0] + " " * ((max_sig_w * (i[0] - marker_output_str_list[k][1]) - 2)) + render(append_str, fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), i[0])
+                    
+                marker_output_str_list += [(render(i[1][0], fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]) + " " + render("-" * (side_w  + max_sig_w * i[0] - len(i[1][0])), fg = i[1][2][0], bg = i[1][2][1], mode = i[1][2][2]), i[0])]
+
+        for i in marker_output_str_list:
+            print(i[0])
 
         return 
 
@@ -1019,6 +1079,98 @@ class vsh(cmd2.Cmd):
             self.spy_sig_list[index] = (self.spy_sig_list[index][0], (foreground, background, mode), self.spy_sig_list[index][2], self.spy_sig_list[index][3])
 
         return 
+
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(marker_argparser)
+    def do_marker(self, opts):
+        index = None
+        time = None
+        index_list = []
+
+        if opts.index:
+            index = str2num(opts.index)
+
+            if index == None:
+                return 
+
+        if opts.time:
+            time = str2num(opts.time)
+
+        j = 0
+
+        for i in self.marker_list:
+            if i[0] == opts.word:
+                index_list += [j]
+            
+            j = j + 1
+        
+        if index != None:
+            index_list += [index]
+
+        index_list.sort(reverse = True)
+
+        if opts.delete:
+            for index in index_list:
+                if 0 <= index < len(self.marker_list):
+                    del self.marker_list[index]
+
+            return 
+
+        if opts.time:
+            ## !!! copy & paste
+            foreground = (255, 255, 0)
+            background = None
+            mode = 0
+
+            if opts.foreground_random:
+                foreground = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            elif opts.foreground:
+                fgVal = str2num(opts.foreground)
+
+                if fgVal == None:
+                    return 
+
+                foreground = ((fgVal >> 16) & 255, (fgVal >> 8) & 255, (fgVal >> 0) & 255)
+
+            if opts.background_random:
+                background = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            elif opts.background:
+                bgVal = str2num(opts.background)
+
+                if bgVal == None:
+                    return 
+
+                background = ((bgVal >> 16) & 255, (bgVal >> 8) & 255, (bgVal >> 0) & 255)
+
+            if opts.mode:
+                modeVal = str2num(opts.mode)
+
+                if modeVal == None:
+                    return 
+            ## !!! copy & paste
+
+            mid = 0
+            flag = False
+
+            for mk in self.marker_list:
+                if mk[0] == opts.word:
+                    flag = True
+                    break
+
+                mid = mid + 1
+
+            if flag:
+                self.marker_list[mid] = (opts.word, time, (foreground, background, mode)) # (name, time, (fg, bg, mode))
+            else:
+                self.marker_list += [(opts.word, time, (foreground, background, mode))] # (name, time, (fg, bg, mode))
+
+        if opts.list:
+            j = 0
+
+            for i in self.marker_list:
+                print("[%5d] %-20d: " % (j, i[1]) + render(i[0], fg = i[2][0], bg = i[2][1], mode = i[2][2]))
+                j += 1
 
 
     @cmd2.with_category(CUSTOM_CATEGORY)
