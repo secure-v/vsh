@@ -178,6 +178,7 @@ vsh> marker -d -i 0
 # 演示
 python vsh.py "load vcd_example/curva_wave.vcd" "cm TOP" "add clk -fg 0x194235" "add data_addr -fg 0x594235" "add instr -fg 0x594285" "add wdata -fg 0xe9f235" "show" "list -s" "marker -t 0 a -fgr" "marker -t 1 b -fgr" "marker -t 2 c -fgr" "marker -t 3 d -fgr" "marker -t 5 e -fgr" "marker -t 6 f -fgr" "show"
 ```
+![使用标号功能](./image/marker.png)
 
 ## 注意事项
 1. 在加载 vcd 文件成功以后，prompt 会变为 /，此时代表目前在根模块，即 TOP 模块的父模块，通过 cm TOP 命令即可进入 TOP 模块。
@@ -223,6 +224,5 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. 支持通过 list 命令显示 marker；
-2. 剔除相同时间点的多个标号显示的 BUG；
+1. 支持无参数时，marker 显示标号列表；
 

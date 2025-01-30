@@ -1204,7 +1204,7 @@ class vsh(cmd2.Cmd):
             else:
                 self.marker_list += [(opts.word, time, (foreground, background, mode))] # (name, time, (fg, bg, mode))
 
-        if opts.list:
+        if opts.list or ((opts.index == None) and ((opts.word == None) or (opts.word == ""))):
             j = 0
 
             for i in self.marker_list:
