@@ -11,6 +11,7 @@
 
 import os
 import sys
+import struct
 import bisect
 import random
 import datetime
@@ -314,6 +315,10 @@ t_argparser = Cmd2ArgumentParser()
 t_argparser.add_argument('-a', '--absolute', action='store_true', help='set value of the time point')
 t_argparser.add_argument('word', nargs='?', help='marker name')
 
+precision_argparser = Cmd2ArgumentParser()
+precision_argparser.add_argument('word', nargs='?', help='precision')
+
+
 icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
 ||     ......@@@@@@@@@@@@@                                                     @@@                  ||     
@@ -346,6 +351,8 @@ class DISP_FORMAT(Enum):
     o = 1
     d = 2
     h = 3
+    f = 4 # float / double
+    s = 5 # signed
 
 
 def render(strVal, *, fg = (255, 255, 255), bg = (0, 0, 0), mode = 0):
@@ -408,6 +415,8 @@ class vsh(cmd2.Cmd):
         self.marker_list = []
 
         self.max_t = None
+
+        self.precision = 4
 
         fg_colors = [c.name.lower() for c in Fg]
         self.add_settable(
@@ -721,6 +730,28 @@ class vsh(cmd2.Cmd):
         return res
 
 
+    def bin2float(self, bstr):
+        val = 0.0
+
+        if len(bstr) == 32:
+            val = struct.unpack('>f', struct.pack('>I', int(bstr, 2)))[0]
+        elif len(bstr) == 64:
+            val = struct.unpack('>d', struct.pack('>Q', int(bstr, 2)))[0]
+
+        return val
+
+
+    def bin2signed(self, bstr):
+        val = -(2 ** (len(bstr) - 1))
+
+        if bstr[0] == '0':
+            val = 0
+
+    
+        val += int(bstr[1:], 2)
+
+        return val
+
     def digit_conv(self, val_list, fmt):
         res = []
 
@@ -745,6 +776,12 @@ class vsh(cmd2.Cmd):
                 val_str = oct(int(bin_str, 2))[2:]
             elif fmt == DISP_FORMAT.d:
                 val_str = "%d" % int(bin_str, 2)
+            elif fmt == DISP_FORMAT.f:
+                fval = self.bin2float(bin_str)
+                val_str = f"{fval:.{self.precision}E}"
+            elif fmt == DISP_FORMAT.s:
+                sval = self.bin2signed(bin_str)
+                val_str = "%d" % (sval)
             else: 
                 val_str = hex(int(bin_str, 2))[2:]
             
@@ -859,7 +896,7 @@ class vsh(cmd2.Cmd):
                 sig_w = i[0].width + 2
             elif i[2] == DISP_FORMAT.o or i[2] == DISP_FORMAT.d:
                 sig_w = int((i[0].width + 2) / 3) + 2
-            else: 
+            else: # signed / float / others
                 sig_w = ((i[0].width + 3) >> 2) + 2
 
             if sig_w > max_sig_w:
@@ -914,6 +951,10 @@ class vsh(cmd2.Cmd):
                 suffix = '[O]'
             elif fmt == DISP_FORMAT.d:
                 suffix = '[D]'
+            elif fmt == DISP_FORMAT.f:
+                suffix = '[F]'
+            elif fmt == DISP_FORMAT.s:
+                suffix = '[S]'
 
             sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width, i[1][0], i[1][1], i[1][2])
             self.shadow_for_logic = sfl_tmp
@@ -994,6 +1035,10 @@ class vsh(cmd2.Cmd):
             fmt = DISP_FORMAT.d
         elif opts.format == "h" or opts.format == "H" or opts.format == "hex" or opts.format == "HEX":
             fmt = DISP_FORMAT.h
+        elif opts.format == "f" or opts.format == "F" or opts.format == "float" or opts.format == "FLOAT":
+            fmt = DISP_FORMAT.f
+        elif opts.format == "s" or opts.format == "S" or opts.format == "signed" or opts.format == "SIGNED":
+            fmt = DISP_FORMAT.s
         elif opts.format == "" or opts.format == None:
             fmt = DISP_FORMAT.h
         else:
@@ -1039,6 +1084,14 @@ class vsh(cmd2.Cmd):
                 
         return 
     
+
+    
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(precision_argparser)
+    def do_precision(self, opts):
+        self.precision = str2num(opts.word)
+
+        return 
 
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(color_argparser)

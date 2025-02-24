@@ -74,13 +74,14 @@ bd -arv32 -sinstr
 ```
 17. color： 设置信号显示时的前景色（-fg）、背景色（-bg）、显示样式（-m），其中前景色 / 背景色，均使用六位的八进制数指定，如 0xff0000 为红色；如果想要设置一种随机的前景色 / 背景色，可通过 -fgr / -bgr 指定。
 18. marker：设置标号，-l 参数显示所有标号；-t 参数指定标号对应的时间点；-d 参数删除指定标号；-i 参数用于根据下标指定标号；-fg / -bg / -m 用于指定标号的颜色与样式；-fgr / -bgr 用于为标号设置随机的前景色 / 背景色。
-19. 目前支持的所有命令（包括 cmd 内置命令）：
+19. precision：设置浮点数显示时的小数位数。
+20. 目前支持的所有命令（包括 cmd 内置命令）：
 ```shell
 Custom Commands
 ===============
-add  cm     del     exit   list    mg   quit     search  t
-bd   color  disasm  intro  load    pwm  reorder  sfl
-bm   conv   e       l      marker  q    s        show
+add  cm     del     exit   list    mg         q        s       show
+bd   color  disasm  intro  load    precision  quit     search  t
+bm   conv   e       l      marker  pwm        reorder  sfl
 
 cmd2 Built-in Commands
 ======================
@@ -224,5 +225,5 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. 支持无参数时，marker 显示标号列表；
-
+1. 支持对浮点数显示以及有符号数显示的支持；
+2. 支持设置浮点数显示的精度；
