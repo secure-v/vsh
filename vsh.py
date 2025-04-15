@@ -266,6 +266,10 @@ list_argparser.add_argument('-s', '--signal_list', action='store_true', help='li
 list_argparser.add_argument('-m', '--marker_list', action='store_true', help='list markers')
 list_argparser.add_argument('word', nargs='?', help='path of submodule')
 
+show_argparser = Cmd2ArgumentParser()
+show_argparser.add_argument('-n', '--next', type=str, help='set the increment of t')
+show_argparser.add_argument('word', nargs='?', help='signal name')
+
 add_argparser = Cmd2ArgumentParser()
 add_argparser.add_argument('-f', '--format', type=str, help='set display format of signal value')
 add_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color')
@@ -656,6 +660,9 @@ class vsh(cmd2.Cmd):
 
         if self.t < 0:
             self.t = 0
+            
+        if self.t > self.max_t:
+            self.t = self.max_t
 
         print("CURRENT_TIME / MAX_TIME:", self.t, "/", self.max_t)
 
@@ -1005,11 +1012,28 @@ class vsh(cmd2.Cmd):
         return 
 
     @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(show_argparser)
     def do_show(self, opts):
         if len(self.spy_sig_list) == 0:
             print("Please adding signal to display (T=%d)." % self.t)
             return
         
+        if opts.next:
+            val = 0
+            try:
+                val = int(opts.next)
+            except Exception as e:
+                print (e, ": Wrong parameter")
+                return
+    
+            self.t += val
+
+            if self.t < 0:
+                self.t = 0
+            
+            if self.t > self.max_t:
+                self.t = self.max_t
+
         self.show_sig()
 
         return 
@@ -1664,4 +1688,7 @@ class vsh(cmd2.Cmd):
 
 if __name__ == '__main__':
     app = vsh()
+    app.onecmd("alias create save history \"|\" sed \'s/^ *[0-9]*[ ]*//\' \">\" .vsh_start_$(date +\"%Y_%m_%d_%H_%M_%S\")")
+    app.onecmd("alias create n show -n 1")
+    app.onecmd("alias create p show -n -1")
     app.cmdloop()
