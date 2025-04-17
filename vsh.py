@@ -2,7 +2,7 @@
 
 # ====================================================================================================
 #  VSH: SHell for Visualizing vcd file                                                              ||
-#  Copyright (C) %-4d Clayden University                                                            ||
+#  Copyright (C) Clayden University                                                                 ||
 #  License GPLv3: GNU GPL version 3                                                                 ||
 #  Author: Fu-yao                                                                                   ||
 #  Bug report & maintainer: fuyao-cu@outlook.com                                                    ||
@@ -395,7 +395,7 @@ class vsh(cmd2.Cmd):
         super().__init__(
             multiline_commands=['echo'],
             persistent_history_file='.vsh_history',
-            startup_script='scripts/startup.txt',
+            startup_script='.vsh_start',
             include_ipy=True,
         )
 
