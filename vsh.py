@@ -427,10 +427,12 @@ class vsh(cmd2.Cmd):
             cmd2.Settable('foreground_color', str, 'Foreground color to use with echo command', self, choices=fg_colors)
         )
 
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_intro(self, _):
         """Display the intro banner"""
         print(self.intro)
+
 
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_sfl(self, opts):
@@ -1139,6 +1141,17 @@ class vsh(cmd2.Cmd):
         return 
     
 
+    def complete_add(self, text, line, begidx, endidx):
+        complete_add_list = []
+
+        if self.cur_mod != None:
+            for k, v in self.cur_mod.children.items():
+                
+                if isinstance(v, VcdVarParsingInfo):
+                    complete_add_list += [v.name]
+
+        return self.basic_complete(text, line, begidx, endidx, complete_add_list)
+
     
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(precision_argparser)
@@ -1340,6 +1353,16 @@ class vsh(cmd2.Cmd):
         self.spy_sig_list = new_list
 
         return 
+
+
+    def complete_del(self, text, line, begidx, endidx):
+        complete_del_list = []
+
+        for i in self.spy_sig_list:
+            complete_del_list += [i[0].name]
+
+        return self.basic_complete(text, line, begidx, endidx, complete_del_list)
+
 
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_conv(self, opts): # convert number
@@ -1716,9 +1739,10 @@ class vsh(cmd2.Cmd):
     def do_q(self, opts):
         self.do_exit(opts)
 
+
 if __name__ == '__main__':
     app = vsh()
-    app.onecmd("alias create save history \"|\" sed \'s/^ *[0-9]*[ ]*//\' \">\" .vsh_start_$(date +\"%Y_%m_%d_%H_%M_%S\")")
-    app.onecmd("alias create n show -n 1")
-    app.onecmd("alias create p show -n -1")
+    # app.onecmd("alias create save history \"|\" sed \'s/^ *[0-9]*[ ]*//\' \">\" .vsh_start_$(date +\"%Y_%m_%d_%H_%M_%S\")")
+    # app.onecmd("alias create n show -n 1")
+    # app.onecmd("alias create p show -n -1")
     app.cmdloop()

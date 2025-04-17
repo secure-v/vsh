@@ -75,10 +75,7 @@ bd -arv32 -sinstr
 17. color： 设置信号显示时的前景色（-fg）、背景色（-bg）、显示样式（-m），其中前景色 / 背景色，均使用六位的八进制数指定，如 0xff0000 为红色；如果想要设置一种随机的前景色 / 背景色，可通过 -fgr / -bgr 指定。
 18. marker：设置标号，-l 参数显示所有标号；-t 参数指定标号对应的时间点；-d 参数删除指定标号；-i 参数用于根据下标指定标号；-fg / -bg / -m 用于指定标号的颜色与样式；-fgr / -bgr 用于为标号设置随机的前景色 / 背景色。
 19. precision：设置浮点数显示时的小数位数。
-20. save：该命令为应用启动时注册的一条内联命令，它能够将本次调试的所有指令导出到一个启动脚本当中，所导出的脚本名称与时间戳有关。
-21. n：即 show -n 1 命令，显示下一时间点的波形。
-22. p：即 show -n -1 命令，显示上一时间点的波形。
-23. 目前支持的所有非内联命令（包括 cmd 内置命令）：
+20. 目前支持的所有非内联命令（包括 cmd 内置命令）：
 ```shell
 Custom Commands
 ===============
@@ -90,6 +87,12 @@ cmd2 Built-in Commands
 ======================
 alias  help     ipy    run_pyscript  set    shortcuts
 edit   history  macro  run_script    shell
+```
+21. 为了便于进行调试，可以在 vsh 启动后设置一系列的别名以简化操作，以下是一些常用的别名：
+```shell
+alias create save history "|" sed 's/^ *[0-9]*[ ]*//' ">" .vsh_start_$(date +"%Y_%m_%d_%H_%M_%S") # 将本次调试的所有指令导出到一个启动脚本中，脚本名称与时间戳有关
+alias create n show -n 1 # 显示下一时间点的波形
+alias create p show -n -1 # 显示上一时间点的波形
 ```
 
 ## 使用示例
@@ -225,4 +228,5 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. cm 命令添加路径补全功能；
+1. add 命令添加路径补全功能；
+2. del 命令添加路径补全功能；
