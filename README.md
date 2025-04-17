@@ -225,4 +225,4 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. cm 命令已支持类似于 linux 的相对路径：../a/b/./../c/d；
+1. load 命令添加路径补全功能；

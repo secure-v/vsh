@@ -466,6 +466,9 @@ class vsh(cmd2.Cmd):
         ## reset values
         self.spy_sig_list = [] # [(VcdVarParsingInfo, time_val, format, color)]
 
+    complete_load = cmd2.Cmd.path_complete
+
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(list_argparser)
     def do_list(self, opts):
