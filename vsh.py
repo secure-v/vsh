@@ -655,6 +655,19 @@ class vsh(cmd2.Cmd):
 
         return 
     
+
+    def complete_cm(self, text, line, begidx, endidx):
+        complete_cm_list = []
+
+        if self.cur_mod != None:
+            for k, v in self.cur_mod.children.items():
+                
+                if isinstance(v, VcdVarScope):
+                    complete_cm_list += [v.name]
+
+        return self.basic_complete(text, line, begidx, endidx, complete_cm_list)
+    
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(t_argparser)
     def do_t(self, opts):
