@@ -583,6 +583,10 @@ class vsh(cmd2.Cmd):
         
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_cm(self, opts):
+        if self.cur_mod == None:
+            print("Please load vcd file.")
+            return
+        
         if opts == ".":
             return 
         elif opts == "..":
@@ -599,10 +603,6 @@ class vsh(cmd2.Cmd):
             
             return
 
-        if self.cur_mod == None:
-            print("Please load vcd file.")
-            return
-        
         if opts == None or opts == "":
             self.do_cm("/")
 
@@ -617,13 +617,26 @@ class vsh(cmd2.Cmd):
 
         args_list = args.split('/')
         flag = True
+        res_mod = self.cur_mod
 
         for i in args_list:
             for k, v in mod_children.items():
                 flag = False
-
-                if v.name == i and isinstance(v, VcdVarScope):
+                
+                if i == '.' or i == '':
+                    mod_children = res_mod.children
+                    flag = True
+                    break
+                elif i == '..':
+                    if res_mod.parent != None:
+                        res_mod = res_mod.parent
+                    
+                    mod_children = res_mod.children
+                    flag = True
+                    break
+                elif v.name == i and isinstance(v, VcdVarScope):
                     mod_children = v.children
+                    res_mod = v
                     flag = True
                     break
             
@@ -633,7 +646,7 @@ class vsh(cmd2.Cmd):
         if flag == False:
             print("No such submodule:", opts)
         else:
-            self.cur_mod = v
+            self.cur_mod = res_mod
             self.adjust_prompt()
 
         return 
