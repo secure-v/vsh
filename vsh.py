@@ -449,6 +449,7 @@ class vsh(cmd2.Cmd):
             return
 
         with open(opts) as vcd_file:
+            self.vcd = VcdParser()
             self.vcd.parse(vcd_file)
 
         self.prompt = "/ > "
