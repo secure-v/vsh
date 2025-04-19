@@ -228,5 +228,4 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. add 命令添加路径补全功能；
-2. del 命令添加路径补全功能；
+1. add 命令添加随机设置前景色与背景色的功能；

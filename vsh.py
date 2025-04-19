@@ -273,7 +273,9 @@ show_argparser.add_argument('word', nargs='?', help='signal name')
 add_argparser = Cmd2ArgumentParser()
 add_argparser.add_argument('-f', '--format', type=str, help='set display format of signal value')
 add_argparser.add_argument('-fg', '--foreground', type=str, help='set foreground color')
+add_argparser.add_argument('-fgr', '--foreground_random', action='store_true', help='set foreground to a random color')
 add_argparser.add_argument('-bg', '--background', type=str, help='set background color')
+add_argparser.add_argument('-bgr', '--background_random', action='store_true', help='set background to a random color')
 add_argparser.add_argument('-m', '--mode', type=str, help='set display mode')
 add_argparser.add_argument('word', nargs='?', help='signal name')
 
@@ -1116,6 +1118,13 @@ class vsh(cmd2.Cmd):
                 return 
 
             background = ((bgVal >> 16) & 255, (bgVal >> 8) & 255, (bgVal >> 0) & 255)
+
+        # random option overwrite the color setting value
+        if opts.foreground_random:
+            foreground = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+            
+        if opts.background_random:
+            background = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
         if opts.mode:
             modeVal = str2num(opts.mode)
