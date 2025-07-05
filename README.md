@@ -1,5 +1,5 @@
 # VSH
-![信号绑定到反汇编器并显示](./image/vsh.png)
+![VSH](./image/vsh.png)
 ## 项目概述
 1. VSH（SHell for Visualizing vcd file）项目为数字波形文件（目前仅支持 VCD，Value Change Dump）命令行查看器。
 2. 本项目采用的开源协议为：GPL v3。
