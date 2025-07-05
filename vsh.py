@@ -359,6 +359,7 @@ class DISP_FORMAT(Enum):
     h = 3
     f = 4 # float / double
     s = 5 # signed
+    a = 6 # ascii
 
 
 def render(strVal, *, fg = (255, 255, 255), bg = (0, 0, 0), mode = 0):
@@ -793,6 +794,34 @@ class vsh(cmd2.Cmd):
 
         return val
 
+
+    def get_ascii_name(self, code):
+        control_char = {
+            0: "NUL",
+            9: "HT",
+            10: "LF",
+            13: "CR",
+            27: "ESC",
+            32: "SPACE"
+        }
+    
+        if 0 <= code <= 31:
+            res = control_char.get(code)
+
+            if res == None:
+                res = f"\\0x{code:02X}"
+
+            return res
+        elif 33 <= code <= 126:
+            return f"{chr(code)}"
+        elif 127 <= code <= 255:
+            return f"\\0x{code:02X}"
+        else:
+            return f"\\0x{code:02X}"
+
+        return ""
+    
+
     def digit_conv(self, val_list, fmt):
         res = []
 
@@ -811,7 +840,9 @@ class vsh(cmd2.Cmd):
                     res += [bin_str]
                     continue
 
-            if fmt == DISP_FORMAT.b:
+            if fmt == DISP_FORMAT.a:
+                val_str = self.get_ascii_name(int(bin_str, 2))
+            elif fmt == DISP_FORMAT.b:
                 val_str = bin_str
             elif fmt == DISP_FORMAT.o:
                 val_str = oct(int(bin_str, 2))[2:]
@@ -933,6 +964,8 @@ class vsh(cmd2.Cmd):
                 sig_w = 24
             elif isinstance (i[3], dict): # macro dict
                 sig_w = max([len(p) for p in i[3].values()])
+            elif i[2] == DISP_FORMAT.a:
+                sig_w = i[0].width + 2
             elif i[2] == DISP_FORMAT.b:
                 sig_w = i[0].width + 2
             elif i[2] == DISP_FORMAT.o or i[2] == DISP_FORMAT.d:
@@ -985,8 +1018,10 @@ class vsh(cmd2.Cmd):
                 val_list = self.digit_conv(val_list, fmt)
 
             suffix = '[H]'
-
-            if fmt == DISP_FORMAT.b:
+            
+            if fmt == DISP_FORMAT.a:
+                suffix = '[A]'
+            elif fmt == DISP_FORMAT.b:
                 suffix = '[B]'
             elif fmt == DISP_FORMAT.o:
                 suffix = '[O]'
@@ -1084,8 +1119,10 @@ class vsh(cmd2.Cmd):
         foreground = (255, 255, 255)
         background = None
         mode = 0
-
-        if opts.format == "b" or opts.format == "B" or opts.format == "bin" or opts.format == "BIN":
+        
+        if opts.format == "a" or opts.format == "A" or opts.format == "ascii" or opts.format == "ASCII":
+            fmt = DISP_FORMAT.a
+        elif opts.format == "b" or opts.format == "B" or opts.format == "bin" or opts.format == "BIN":
             fmt = DISP_FORMAT.b
         elif opts.format == "o" or opts.format == "O" or opts.format == "oct" or opts.format == "OCT":
             fmt = DISP_FORMAT.o
