@@ -2,7 +2,7 @@
 
 # ====================================================================================================
 #  VSH: SHell for Visualizing vcd file                                                              ||
-#  Copyright (C) Clayden University                                                                 ||
+#  Copyleft (C) Clayden University                                                                 ||
 #  License GPLv3: GNU GPL version 3                                                                 ||
 #  Author: Fu-yao                                                                                   ||
 #  Bug report & maintainer: fuyao-cu@outlook.com                                                    ||

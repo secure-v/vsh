@@ -230,4 +230,4 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. 显示格式支持 ASCII；
+1. 支持 randc 命令；
