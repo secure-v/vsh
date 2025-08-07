@@ -321,6 +321,9 @@ t_argparser = Cmd2ArgumentParser()
 t_argparser.add_argument('-a', '--absolute', action='store_true', help='set value of the time point')
 t_argparser.add_argument('word', nargs='?', help='marker name')
 
+randc_argparser = Cmd2ArgumentParser()
+randc_argparser.add_argument('-n', '--number', type=str, help='number of random color')
+
 precision_argparser = Cmd2ArgumentParser()
 precision_argparser.add_argument('word', nargs='?', help='precision')
 
@@ -1107,6 +1110,7 @@ class vsh(cmd2.Cmd):
 
         return 
 
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(add_argparser)
     def do_add(self, opts):
@@ -1199,6 +1203,31 @@ class vsh(cmd2.Cmd):
         return self.basic_complete(text, line, begidx, endidx, complete_add_list)
 
     
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(randc_argparser)
+    def do_randc(self, opts):
+        color_number = 1
+
+        if opts.number != None:
+            color_number = str2num(opts.number)
+
+        if color_number == None:
+            color_number = 1
+        
+        if color_number < 0:
+            color_number = 1
+        
+        if color_number > 100:
+            color_number = 99
+            print("[Warning] Exceed the limit of number (<= 100), set number as 100.")
+
+        for i in range(color_number):
+            colorVal = random.randint(0, 256 * 256 * 256 - 1)
+            print("%2d. " % (i) + render("    ", bg = (((colorVal >> 16) & 255, (colorVal >> 8) & 255, (colorVal >> 0) & 255))) + " 0x%06x" % colorVal)
+            
+        return
+    
+
     @cmd2.with_category(CUSTOM_CATEGORY)
     @with_argparser(precision_argparser)
     def do_precision(self, opts):

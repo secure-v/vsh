@@ -76,20 +76,21 @@ bd -arv32 -sinstr
 17. color： 设置信号显示时的前景色（-fg）、背景色（-bg）、显示样式（-m），其中前景色 / 背景色，均使用六位的八进制数指定，如 0xff0000 为红色；如果想要设置一种随机的前景色 / 背景色，可通过 -fgr / -bgr 指定。
 18. marker：设置标号，-l 参数显示所有标号；-t 参数指定标号对应的时间点；-d 参数删除指定标号；-i 参数用于根据下标指定标号；-fg / -bg / -m 用于指定标号的颜色与样式；-fgr / -bgr 用于为标号设置随机的前景色 / 背景色。
 19. precision：设置浮点数显示时的小数位数。
-20. 目前支持的所有非内联命令（包括 cmd 内置命令）：
+20. randc：生成一组随机的色彩，显示其颜色值，-n 参数可设置显示的随机颜色数量（超过 100 时，仅显示 100 项）。
+21. 目前支持的所有非内联命令（包括 cmd 内置命令）：
 ```shell
 Custom Commands
 ===============
-add  cm     del     exit   list    mg         q        s       show
-bd   color  disasm  intro  load    precision  quit     search  t
-bm   conv   e       l      marker  pwm        reorder  sfl
+add  cm     del     exit   list    mg         q      reorder  sfl
+bd   color  disasm  intro  load    precision  quit   s        show
+bm   conv   e       l      marker  pwm        randc  search   t
 
 cmd2 Built-in Commands
 ======================
 alias  help     ipy    run_pyscript  set    shortcuts
 edit   history  macro  run_script    shell
 ```
-21. 为了便于进行调试，可以在 vsh 启动后设置一系列的别名以简化操作，以下是一些常用的别名：
+22. 为了便于进行调试，可以在 vsh 启动后设置一系列的别名以简化操作，以下是一些常用的别名：
 ```shell
 alias create save history "|" sed 's/^ *[0-9]*[ ]*//' ">" .vsh_start_$(date +"%Y_%m_%d_%H_%M_%S") # 将本次调试的所有指令导出到一个启动脚本中，脚本名称与时间戳有关
 alias create n show -n 1 # 显示下一时间点的波形
