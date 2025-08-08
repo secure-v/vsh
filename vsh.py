@@ -363,6 +363,7 @@ class DISP_FORMAT(Enum):
     f = 4 # float / double
     s = 5 # signed
     a = 6 # ascii
+    m = 7 # machine code (disassemble result) / macro name
 
 
 def render(strVal, *, fg = (255, 255, 255), bg = (0, 0, 0), mode = 0):
@@ -1034,6 +1035,8 @@ class vsh(cmd2.Cmd):
                 suffix = '[F]'
             elif fmt == DISP_FORMAT.s:
                 suffix = '[S]'
+            elif fmt == DISP_FORMAT.m:
+                suffix = '[M]'
 
             sig_str = self.align_sig(side_w, max_sig_w, [v.name + suffix] + val_list, v.width, i[1][0], i[1][1], i[1][2])
             self.shadow_for_logic = sfl_tmp
@@ -1712,7 +1715,7 @@ class vsh(cmd2.Cmd):
             index += 1
         
         for i in bm_index_list:
-            self.spy_sig_list[i] = self.spy_sig_list[i][:3] + (self.macro_map[opts.name], ) + self.spy_sig_list[i][4:]
+            self.spy_sig_list[i] = self.spy_sig_list[i][:2] + (DISP_FORMAT.m, self.macro_map[opts.name], ) + self.spy_sig_list[i][4:]
             print(i, ":", opts.signal_name, "<>", opts.name)
 
         if len(bm_index_list) == 0:
@@ -1747,7 +1750,7 @@ class vsh(cmd2.Cmd):
             index += 1
         
         for i in bm_index_list:
-            self.spy_sig_list[i] = self.spy_sig_list[i][:3] + ((cs_arch, cs_mode), ) + self.spy_sig_list[i][4:]
+            self.spy_sig_list[i] = self.spy_sig_list[i][:2] + (DISP_FORMAT.m, (cs_arch, cs_mode), ) + self.spy_sig_list[i][4:]
             print(i, ":", opts.signal_name, "<>", opts.architecture)
 
         if len(bm_index_list) == 0:

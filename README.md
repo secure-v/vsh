@@ -230,4 +230,4 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. 支持 randc 命令；
+1. 修复宏定义 / 反汇编的显示前缀；
