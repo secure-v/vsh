@@ -407,7 +407,12 @@ class vsh(cmd2.Cmd):
         )
 
         # self.intro = style(icon, fg=Fg.BLUE, bg=None, bold=True) + info
-        self.intro = icon.replace('@', "\033[34m@\033[0m") + info
+        
+        if 'VSH_INTRO' in os.environ and os.environ['VSH_INTRO'].lower().startswith('off'):
+            self.intro = None
+        else:
+            self.intro = icon.replace('@', "\033[34m@\033[0m") + info
+
         self.prompt = 'vsh> '
         self.continuation_prompt = '... '
         self.self_in_py = True
@@ -438,6 +443,7 @@ class vsh(cmd2.Cmd):
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_intro(self, _):
         """Display the intro banner"""
+        self.intro = icon.replace('@', "\033[34m@\033[0m") + info
         print(self.intro)
 
 

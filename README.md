@@ -202,6 +202,10 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 ``` 
 2. 默认情况下，VSH 支持命令历史，其历史将保存在同一目录下的 .vsh_history 文件中。
 3. 通过 verilator 导出的 vcd 文件，TOP 模块对仿真的顶层模块进行了封装，相当于 TOP 模块当中包含了整个顶层模块，因此顶层模块的接口和模块本身都可以通过在 TOP 模块调用 list 命令查看。
+4. 若不希望显示启动后的介绍页面，可通过 VSH_INTRO 宏进行设置：
+```shell
+export VSH_INTRO=off && ./vsh.py
+```
 
 ## 贡献列表
 1. 参与本项目的成员如下：
@@ -230,4 +234,4 @@ python vsh.py "sfl" "load vcd_example/gate.vcd" "cm TOP" "add *" "show" quit
 1. 待测试 ... 
 
 ## 更新说明
-1. 修复宏定义 / 反汇编的显示前缀；
+1. 增加关闭介绍页的环境变量支持；
