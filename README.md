@@ -77,25 +77,9 @@ bd -arv32 -sinstr
 18. marker：设置标号，-l 参数显示所有标号；-t 参数指定标号对应的时间点；-d 参数删除指定标号；-i 参数用于根据下标指定标号；-fg / -bg / -m 用于指定标号的颜色与样式；-fgr / -bgr 用于为标号设置随机的前景色 / 背景色。
 19. precision：设置浮点数显示时的小数位数。
 20. randc：生成一组随机的色彩，显示其颜色值，-n 参数可设置显示的随机颜色数量（超过 100 时，仅显示 100 项）。
-21. 目前支持的所有非内联命令（包括 cmd 内置命令）：
-```shell
-Custom Commands
-===============
-add  cm     del     exit   list    mg         q      reorder  sfl
-bd   color  disasm  intro  load    precision  quit   s        show
-bm   conv   e       l      marker  pwm        randc  search   t
-
-cmd2 Built-in Commands
-======================
-alias  help     ipy    run_pyscript  set    shortcuts
-edit   history  macro  run_script    shell
-```
-22. 为了便于进行调试，可以在 vsh 启动后设置一系列的别名以简化操作，以下是一些常用的别名：
-```shell
-alias create save history "|" sed 's/^ *[0-9]*[ ]*//' ">" .vsh_start_$(date +"%Y_%m_%d_%H_%M_%S") # 将本次调试的所有指令导出到一个启动脚本中，脚本名称与时间戳有关
-alias create n show -n 1 # 显示下一时间点的波形
-alias create p show -n -1 # 显示上一时间点的波形
-```
+22. save：保持当前使用的所有命令，参数用于指定文件名。
+23. n：显示下一时间点的波形。
+24. p：显示上一时间点的波形。
 
 ## 使用示例
 1. 打开 vcd_example 目录下的 gate.vcd 文件并显示波形（在 vsh 项目目录下运行 vsh）：
@@ -234,4 +218,8 @@ export VSH_INTRO=off && ./vsh.py
 1. 待测试 ... 
 
 ## 更新说明
-1. 增加关闭介绍页的环境变量支持；
+1. 添加了 marker 命令的别名：m；
+2. 添加了 del 命令的别名：d；
+3. 优化重复代码；
+4. 添加 save 功能；
+

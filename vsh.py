@@ -327,6 +327,8 @@ randc_argparser.add_argument('-n', '--number', type=str, help='number of random 
 precision_argparser = Cmd2ArgumentParser()
 precision_argparser.add_argument('word', nargs='?', help='precision')
 
+save_argparser = Cmd2ArgumentParser()
+save_argparser.add_argument('word', nargs='?', help='path')
 
 icon = r"""======================================================================================================
 ||    ...@@@@@@@@@                                                               @                  ||
@@ -435,6 +437,18 @@ class vsh(cmd2.Cmd):
         self.precision = 4
 
         fg_colors = [c.name.lower() for c in Fg]
+        
+        self.history.clear()
+        self.aliases['n'] = 'show -n 1'
+        self.aliases['p'] = 'show -n -1'
+        self.aliases['l'] = 'list'
+        self.aliases['s'] = 'search'
+        self.aliases['m'] = 'marker'
+        self.aliases['d'] = 'del'
+        self.aliases['e'] = 'exit'
+        self.aliases['q'] = 'exit'
+        self.aliases['quit'] = 'exit'
+
         self.add_settable(
             cmd2.Settable('foreground_color', str, 'Foreground color to use with echo command', self, choices=fg_colors)
         )
@@ -456,6 +470,9 @@ class vsh(cmd2.Cmd):
             self.shadow_for_logic = True
         
         return
+
+
+    complete_load = cmd2.Cmd.path_complete
 
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_load(self, opts):
@@ -480,8 +497,6 @@ class vsh(cmd2.Cmd):
         
         ## reset values
         self.spy_sig_list = [] # [(VcdVarParsingInfo, time_val, format, color)]
-
-    complete_load = cmd2.Cmd.path_complete
 
 
     @cmd2.with_category(CUSTOM_CATEGORY)
@@ -526,47 +541,6 @@ class vsh(cmd2.Cmd):
             elif isinstance(v, VcdVarScope):
                 print("\033[34m%s\033[0m" % (v.name))
 
-    @cmd2.with_category(CUSTOM_CATEGORY)
-    @with_argparser(list_argparser)
-    def do_l(self, opts):
-        if opts.signal_list:
-            index_num = 0
-            
-            for i in self.spy_sig_list:
-                mod = i[0].parent
-                mod_hier = ""
-
-                if mod.parent == None:
-                    mod_hier = "/" + mod_hier
-
-                while mod.parent != None:
-                    mod_hier = "/" + mod.name + mod_hier
-                    mod = mod.parent
-
-                print("%-4d" % index_num, i[0].name, i[0].width, mod_hier)
-                index_num += 1
-
-            return 
-
-        if opts.marker_list:
-            j = 0
-
-            for i in self.marker_list:
-                print("[%5d] %-20d: " % (j, i[1]) + render(i[0], fg = i[2][0], bg = i[2][1], mode = i[2][2]))
-                j += 1
-
-            return
-
-        if self.cur_mod == None:
-            return
-
-        mod = self.cur_mod.children
-
-        for k, v in mod.items():
-            if isinstance(v, VcdVarParsingInfo):
-                print("\033[32m%s\033[0m %d" % (v.name, v.width))
-            elif isinstance(v, VcdVarScope):
-                print("\033[34m%s\033[0m" % (v.name))
     
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_pwm(self, opts):
@@ -1597,12 +1571,6 @@ class vsh(cmd2.Cmd):
         print(print_str)
 
         return 
-    
-    @cmd2.with_category(CUSTOM_CATEGORY)
-    def do_s(self, opts): # search condition
-        self.do_search(opts)
-
-        return 
 
     
     @cmd2.with_category(CUSTOM_CATEGORY)
@@ -1806,22 +1774,34 @@ class vsh(cmd2.Cmd):
         print(instr)
 
         return
+    
+
+    @cmd2.with_category(CUSTOM_CATEGORY)
+    @with_argparser(save_argparser)
+    def do_save(self, opts):
+        fp = ".vsh_start-" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+        
+        if opts.word != None:
+            if os.path.exists(opts.word):
+                print("File already exists:", opts.word)
+                return
+            else:
+                fp = opts.word
+
+        res_str = ''
+
+        for i in self.history:
+            res_str += str(i) + '\n'
+        
+        with open(fp, 'w', encoding="utf-8") as f:
+            f.write(res_str)
+
+        return
+
 #########################################################################    
     @cmd2.with_category(CUSTOM_CATEGORY)
     def do_exit(self, opts):
         sys.exit(0)
-    
-    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
-    def do_e(self, opts):
-        self.do_exit(opts)
-    
-    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
-    def do_quit(self, opts):
-        self.do_exit(opts)
-    
-    @cmd2.with_category(CUSTOM_CATEGORY) # alias exit
-    def do_q(self, opts):
-        self.do_exit(opts)
 
 
 if __name__ == '__main__':
