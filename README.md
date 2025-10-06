@@ -133,6 +133,8 @@ vsh> save
 **启动文件被保存后，可以通过命令行方式执行：**
 ```shell
 vsh "run_script .vsh_start_up_2025_01_01_19_00_00" "exit"
+# 注意：如果 VCD 文件较大，文件解析过程将消耗较多时间，此时可以将脚本的执行置于后台：
+vsh "run_script .vsh_start_up_2025_01_01_19_00_00" "exit" &
 ```
 6. 设置显示时的信号颜色：
 ```python
